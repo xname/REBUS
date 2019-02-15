@@ -8,11 +8,9 @@
  */
 
 
-
 // #include "../include/render.h"
 #include <Bela.h>
 #include <cmath>
-#include <rtdk.h>
 #include <unistd.h>
 #include <WriteFile.h>
 
@@ -175,7 +173,7 @@ void spectrify(float phaseReading, float gainReading){
 	while(gEmPhase >= 2.0 * M_PI)
 	            gEmPhase -= 2.0 * M_PI;
 	while(gEmPhase < 0)
-	            gEmPhase +=2.0*M_PI;
+	            gEmPhase +=2.0 * M_PI;
 
 	float gainVoltage = gainReading *  gADCFullScale;
 	gEmGain =  gainVoltage*(gMaxGain - gMinGain) + gMinGain;
@@ -185,6 +183,14 @@ void spectrify(float phaseReading, float gainReading){
 	 *  0dB = 1
 	 *  -6 dB = 0.5
 	 *  -12dB = 0.25
+	 * dBmV is a measure of signal strength in wires and cables at RF and Af freq
+	 * CLIVE:
+	 * this is a measure of power in RF
+	 * 0dBm = 1mW
+	 * -30dB = 1/1000 W
+	 * +30 dB = 1000 W
+	 *
+	 *
 	 */
 
 }
@@ -223,26 +229,28 @@ void render(BelaContext* context, void* arg)
 		float phaseReading = matrixIn[n/2*8]; // pot value, interleaved, half audio rate
 		//rt_printf("pot raw values are %f\n", matrixIn[n/2*8]); // test to set min and max value to be mapped */
 
-		float phase = (gADCFullScale * phaseReading - gMinPhase) / (gMaxPhase - gMinPhase);
-		// rt_printf("raw phase: %f, phase: %f\n", matrixIn[n/2*8], phase); // test to set min and max value to be mapped */
+		float phaseVoltage = phaseReading * gADCFullScale;  //4.096 full scale value of the converter of matrixIn
+//		gEmPhase = (- phaseVoltage * 100 +180)/180 * M_PI; // negative slope therefore minus, approx 0.03 to 0
 
 		// read the  amplitude / GAIN 
 		float gainReading = matrixIn[n/2*8 + 4]; // pot value, interleaved, half audio rate
 		//rt_printf("gain pot raw values are %f\n", matrixIn[n/2*8 + 4]); //test to set min and max value to be mapped */
 
-		float gain = (gADCFullScale * gainReading - gMinGain) / (gMaxGain - gMinGain);
+		float gainVoltage = gainReading *  gADCFullScale;
+
+	    //gEmPhase = phaseReading * M_PI / 0.03; // wrong mapping but nice result and interaction
+
+		float phase = (phaseVoltage - gMinPhase) / (gMaxPhase - gMinPhase);
+		// rt_printf("raw phase: %f, phase: %f\n", matrixIn[n/2*8], phase); // test to set min and max value to be mapped */
+
+		float gain = (gainVoltage - gMinGain) / (gMaxGain - gMinGain);
 
 		//rt_printf("gain is  %f\n", gain);
 		//rt_printf("gEmGain is  %f\n", gEmGain);
 
 		gFrequency = phase*(gMaxFrequency - gMinFrequency) + gMinFrequency;
 
-		float gainVoltage = gainReading *  gADCFullScale;
 
-	    //gEmPhase = phaseReading * M_PI / 0.03; // wrong mapping but nice result and interaction
-
-		float phaseVoltage = phaseReading * gADCFullScale;  //4.096 full scale value of the converter of matrixIn
-//		gEmPhase = (- phaseVoltage * 100 +180)/180 * M_PI; // negative slope therefore minus, approx 0.03 to 0
 
 		spectrify (phaseVoltage, gainVoltage);
 		// rt_printf("phaseVoltage: %f; gEmPhase: %f\n", phaseVoltage, gEmPhase);
