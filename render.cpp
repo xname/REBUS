@@ -2,17 +2,15 @@
  *  render.cpp
  *  Eleonora Maria Irene Oreggia ((xname))
  *  REBUS is the new version of Spectrifier, now obsolete 
- *  Initial infrastructure based on the code by Andrew McPherson and parallel authors
+ *  Thanks to Andrew McPherson, Giulio Moro and the Bela team (bela.io).
  * 	Developed at Queen Mary University of London, at Media & Arts Technology DTC
- *	In collaboration with the Antennas & Electromagnetics Group and C4DM (Centre for Digital Music)
+ *	A collaboration between the Antennas & Electromagnetics Group and C4DM (Centre for Digital Music)
  */
 
 
-// #include "../include/render.h"
 #include <Bela.h>
 #include <cmath>
 #include <unistd.h>
-#include <WriteFile.h>
 
 // read square wave table
 #include "square_table.h"
@@ -49,39 +47,9 @@ float pastStateOutHP = 0.0;  //gHP_a2
 
 int counter = 0;
 
-/* TODO on/off button */
-//extern int gIsPlaying;
-//extern int gTriggerButton1;
 
-/* log data */ 
-WriteFile file1;
-WriteFile file2; 
-
-
-bool setup(BelaContext* context, void* userData)
+bool setup(BelaContext *context, void *userData)
 {
-	int numMatrixChannels = context->analogInChannels;
-	int numAudioChannels = context->audioInChannels;
-	int numAudioFramesPerPeriod = context->audioFrames;
-	float matrixSampleRate = context->analogSampleRate;
-	float audioSampleRate = context->audioSampleRate;
-
-// logging data
-	file1.init("out.bin"); //set the file name to write to
-	file1.setEchoInterval(10000); // only print to the console every 10000 calls to log
-	file1.setFileType(kBinary);
-	// set the format that you want to use for your output.
-	// Please use %f only (with modifiers).
-	// When in binary mode, this is used only for echoing to console
-	file1.setFormat("binary: %.4f %.4f\n"); 
-	file2.init("out.m"); //set the file name to write to
-	file2.setHeader("myvar=[\n"); //set one or more lines to be printed at the beginning of the file
-	file2.setFooter("];\n"); //set one or more lines to be printed at the end of the file
-	file2.setFormat("%.4f\n"); // set the format that you want to use for your output. Please use %f only (with modifiers)
-	file2.setFileType(kText);
-	file2.setEchoInterval(10000); // only print to the console 1 line every other 10000 /*
-
-
 
 	/*
 	 * Calculating filter coefficients
@@ -90,7 +58,7 @@ bool setup(BelaContext* context, void* userData)
 
 	float filterFrequency = 300;
 	float Q = sqrt(2.0)*0.5; // quality factor for Butterworth filter
-	float T = 1/audioSampleRate; //period T, inverse of sampling frequency
+	float T = 1/context->audioSampleRate; //period T, inverse of sampling frequency
 	float w = 2.0*M_PI*filterFrequency; //angular freq in radians per sec
 
 	float delta = (4.0+((2*T)*(w/Q))+(w*w*T*T)); //factor to simplify the equation
@@ -102,14 +70,7 @@ bool setup(BelaContext* context, void* userData)
 	gHP_b1= -8/delta; //-1.808304;
 	gHP_b2= gHP_b0;// 0.904152;
 
-	/* //check and debug
-	rt_printf("gHP_a1 is: %f\n", gHP_a1);
-	rt_printf("gHP_a2 is: %f\n", gHP_a2);
-	rt_printf("gHP_b0 is: %f\n", gHP_b0);
-	rt_printf("gHP_b1 is: %f\n", gHP_b1);
-	rt_printf("gHP_b2 is: %f\n", gHP_b2); */
-
-	gInverseSampleRate = 1.0 / audioSampleRate;
+	gInverseSampleRate = 1.0 / context->audioSampleRate;
 	gPhase = 0.0;
 	return true;
 }
@@ -176,13 +137,13 @@ void spectrify(float phaseReading, float gainReading){
 	            gEmPhase +=2.0 * M_PI;
 
 	float gainVoltage = gainReading *  gADCFullScale;
-	gEmGain =  gainVoltage*(gMaxGain - gMinGain) + gMinGain;
+	gEmGain =  gainVoltage * (gMaxGain - gMinGain) + gMinGain;
 
 	// it is a value in decibel 30 mV per decibel
 	/* TODO mapping dB to amplitude, exponential function
-	 *  0dB = 1
-	 *  -6 dB = 0.5
-	 *  -12dB = 0.25
+	 *  0dB = 1 
+	 *  -6 dB = 0.5 
+	 *  -12dB = 0.25 
 	 * dBmV is a measure of signal strength in wires and cables at RF and Af freq
 	 * CLIVE:
 	 * this is a measure of power in RF
@@ -208,71 +169,37 @@ void spectrify(float phaseReading, float gainReading){
 void render(BelaContext* context, void* arg)
 {
 	
-    int numMatrixFrames = context->analogInChannels;
-	int numAudioFrames = context->audioInChannels;
-	const float* audioIn = context->audioIn;
-	float* audioOut = context->audioOut;
-	const float* matrixIn = context->analogIn;
-	float* matrixOut = context->analogOut;
-	
  
-	for(int n = 0; n < numAudioFrames; n++) {
+	for(unsigned int n = 0; n < context->audioFrames; n++) {
 
-         //matrixIn is defunct analogIn(context, frame to read on, channel);
-		analogIn(context, context->gAnalogFramesPerAudioFrames, 1);
-
-		/* log data */
-		file1.log(&(context->analogIn[n*context->analogFrames]), 2); // log an array of values
-		file2.log(context->analogIn[n*context->analogFrames]); // log a single value
 
 		// read the  PHASE 
-		float phaseReading = matrixIn[n/2*8]; // pot value, interleaved, half audio rate
-		//rt_printf("pot raw values are %f\n", matrixIn[n/2*8]); // test to set min and max value to be mapped */
+		float phaseReading = context->analogIn[n/2*8]; // pot value, interleaved, half audio rate
 
 		float phaseVoltage = phaseReading * gADCFullScale;  //4.096 full scale value of the converter of matrixIn
 //		gEmPhase = (- phaseVoltage * 100 +180)/180 * M_PI; // negative slope therefore minus, approx 0.03 to 0
 
 		// read the  amplitude / GAIN 
-		float gainReading = matrixIn[n/2*8 + 4]; // pot value, interleaved, half audio rate
-		//rt_printf("gain pot raw values are %f\n", matrixIn[n/2*8 + 4]); //test to set min and max value to be mapped */
+		float gainReading = context->analogIn[n/2*8 + 4]; // pot value, interleaved, half audio rate
 
 		float gainVoltage = gainReading *  gADCFullScale;
 
 	    //gEmPhase = phaseReading * M_PI / 0.03; // wrong mapping but nice result and interaction
 
 		float phase = (phaseVoltage - gMinPhase) / (gMaxPhase - gMinPhase);
-		// rt_printf("raw phase: %f, phase: %f\n", matrixIn[n/2*8], phase); // test to set min and max value to be mapped */
-
 		float gain = (gainVoltage - gMinGain) / (gMaxGain - gMinGain);
-
-		//rt_printf("gain is  %f\n", gain);
-		//rt_printf("gEmGain is  %f\n", gEmGain);
 
 		gFrequency = phase*(gMaxFrequency - gMinFrequency) + gMinFrequency;
 
-
-
 		spectrify (phaseVoltage, gainVoltage);
-		// rt_printf("phaseVoltage: %f; gEmPhase: %f\n", phaseVoltage, gEmPhase);
-
-		//usleep(1000);
-
-		if(counter == 100) {
-			rt_printf("phaseVoltage: %f; gEmPhase: %f\n", phaseVoltage, gEmPhase);
-                       rt_printf("gain: %f; gEmGain: %f\n", gain, gEmGain);
-			counter = 0;
-		}
-		counter++;
-
-		// rt_printf("gain: %f; gEmGain: %f\n", gain, gEmGain);
 
 		// pass to output as filterIn to a high pass filter NO SQUARE
-		float filterIn_A = gEmGain *  gPhase  + gEmGain * (gPhase+gEmPhase) + (gEmPhase*gEmGain)  + ((gain + phase)*2 - 1); // eliminate offset and remap from 0:1 to -1:1 to keep in range
+		float FilterIn_A = gEmGain *  gPhase  + gEmGain * (gPhase+gEmPhase) + (gEmPhase*gEmGain)  + ((gain + phase)*2 - 1); // eliminate offset and remap from 0:1 to -1:1 to keep in range
 
         // pass to output as filterIn to a high pass filter // with square
-        float filterIn_B = gEmGain *  square(gPhase)  + gEmGain * square(gPhase+gEmPhase) + (gEmPhase*gEmGain)  + ((gain + phase)*2 - 1); // eliminate offset and remap from 0:1 to -1:1 to keep in range
+        float FilterIn_B = gEmGain *  square(gPhase)  + gEmGain * square(gPhase+gEmPhase) + (gEmPhase*gEmGain)  + ((gain + phase)*2 - 1); // eliminate offset and remap from 0:1 to -1:1 to keep in range
 
-		float filterIn =  FilterIn_A * (FilterIn_B /2);    
+		float FilterIn =  FilterIn_A * (FilterIn_B /2);    
 
 		/* anular modulation between phase and gain,
 		 * not very significant from a physical point of view
@@ -286,12 +213,12 @@ void render(BelaContext* context, void* arg)
 
 		//apply filter on output
 
-		float out=(gHP_b0*filterIn) + (gHP_b1*prevStateInHP) + (gHP_b2*pastStateInHP) - (gHP_a1*prevStateOutHP) - (gHP_a2*pastStateOutHP);
+		float out=(gHP_b0*FilterIn) + (gHP_b1*prevStateInHP) + (gHP_b2*pastStateInHP) - (gHP_a1*prevStateOutHP) - (gHP_a2*pastStateOutHP);
 
 		// rt_printf("filterIn is  %f\n", filterIn);
 
 		pastStateInHP=prevStateInHP;    //store current x[n-1] that will become x[n-2]
-		prevStateInHP=filterIn;			//store current x[n] that will become x[n-1]
+		prevStateInHP=FilterIn;			//store current x[n] that will become x[n-1]
 
 		pastStateOutHP=prevStateOutHP;  //store current y[n-1] that will become y[n-1]
 		prevStateOutHP=out; //store current y[n] that will become y[n-1]
@@ -303,14 +230,15 @@ void render(BelaContext* context, void* arg)
 		if(gPhase > 2.0 * M_PI)
 			gPhase -= 2.0 * M_PI;
 
-		for(int channel = 0; channel < context->audioInChannels; channel++)
-			audioOut[n * context->audioOutChannels + channel] = out;
+		for(unsigned int channel = 0; channel < context->audioInChannels; channel++)
+//			context->audioOut[n * context->audioOutChannels + channel] = out;
+			audioWrite(context, n, channel, out);
 
 	}
 }
 
 
-void cleanup(BelaContext* context, void* userData)
+void cleanup(BelaContext *context, void *userData)
 {
 
 }
