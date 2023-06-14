@@ -137,7 +137,6 @@ int main(int argc, char **argv)
 #include <cstring>
 
 #if RECORD
-const char *record_path = "REBUS.wav";
 // must be >= block size * channels
 #define RECORD_SIZE (1024 * 4)
 void record(void *);
@@ -211,6 +210,8 @@ bool setup(BelaContext *context, void *userData)
 	info.channels = 4;
 	info.samplerate = context->audioSampleRate;
 	info.format = SF_FORMAT_WAV | SF_FORMAT_FLOAT;
+	char record_path[100];
+	snprintf(record_path, sizeof(record_path), "%08x.wav", (int) time(0));
 	if (! (S->out_file = sf_open(record_path, SFM_WRITE, &info)))
 	{
 		return false;
