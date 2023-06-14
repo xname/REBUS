@@ -149,22 +149,14 @@ void record(void *);
 
 // state
 
+#include "composition.h"
+
 struct
 {
 
-
-
-
 //---------------------------------------------------------------------
-// {{{ synthesis state
-
-	float phase[3];
-
-// }}} synthesis state
+	struct COMPOSITION composition;
 //---------------------------------------------------------------------
-
-
-
 
 #if RECORD
 	// recording
@@ -229,21 +221,10 @@ bool setup(BelaContext *context, void *userData)
 	S->items = context->audioFrames * info.channels;
 #endif
 
-
-
-
 //---------------------------------------------------------------------
-// {{{ synthesis setup
-
-	// ...
-
-// }}} synthesis setup
+// compostion setup
+	return COMPOSITION_setup(context, &S->composition);
 //---------------------------------------------------------------------
-
-
-
-
-	return true;
 }
 
 // render
@@ -286,29 +267,10 @@ void render(BelaContext *context, void *userData)
 		// render
 		float out[2] = { 0.0f, 0.0f };
 
-
-
-
 //---------------------------------------------------------------------
-// {{{ synthesis render
-
-		// stereo detuned sawtooth/PWM
-		// FIXME bandlimited oscillators
-		float increment = 50.0f / context->audioSampleRate;
-		S->phase[0] += increment;
-		S->phase[1] += increment * (1.0f + 0.1f * phase);
-		S->phase[2] += increment * (1.0f - 0.1f * phase);
-		S->phase[0] -= std::floor(S->phase[0]);
-		S->phase[1] -= std::floor(S->phase[1]);
-		S->phase[2] -= std::floor(S->phase[2]);
-		out[0] = (S->phase[1] - S->phase[0]) * magnitude;
-		out[1] = (S->phase[2] - S->phase[0]) * magnitude;
-
-// }}} synthesis render
+// composition render
+		COMPOSITION_render(context, &S->composition, out, in, magnitude, phase);
 //---------------------------------------------------------------------
-
-
-
 
 		// output
 #if SCOPE
@@ -363,19 +325,10 @@ void cleanup(BelaContext *context, void *userData)
 		}
 #endif
 
-
-
-
 //---------------------------------------------------------------------
-// {{{ synthesis cleanup
-
-	// ...
-
-// }}} synthesis cleanup
+// composition cleanup
+		COMPOSITION_cleanup(context, &S->composition);
 //---------------------------------------------------------------------
-
-
-
 
 		// free memory
 		std::free(S);
