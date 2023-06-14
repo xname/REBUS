@@ -45,10 +45,10 @@
 struct BelaContext
 {
 	jack_client_t *client;
-	jack_port_t *in[2];
+	jack_port_t *in[4];
 	jack_port_t *out[2];
 
-	const float *in_buffer[2];
+	const float *in_buffer[4];
 	float *out_buffer[2];
 
 	unsigned int audioFrames;
@@ -74,6 +74,8 @@ int process(jack_nframes_t nframes, void *arg)
 	BelaContext *context = (BelaContext *) arg;
 	context->in_buffer[0] = (const float *) jack_port_get_buffer(context->in[0], nframes);
 	context->in_buffer[1] = (const float *) jack_port_get_buffer(context->in[1], nframes);
+	context->in_buffer[2] = (const float *) jack_port_get_buffer(context->in[2], nframes);
+	context->in_buffer[3] = (const float *) jack_port_get_buffer(context->in[3], nframes);
 	context->out_buffer[0] = (float *) jack_port_get_buffer(context->out[0], nframes);
 	context->out_buffer[1] = (float *) jack_port_get_buffer(context->out[1], nframes);
 	context->audioFrames = nframes;
@@ -98,6 +100,8 @@ int main(int argc, char **argv)
 		jack_set_process_callback(context->client, process, context);
 		context->in[0] = jack_port_register(context->client, "in_1", JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
 		context->in[1] = jack_port_register(context->client, "in_2", JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+		context->in[2] = jack_port_register(context->client, "magnitude", JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+		context->in[3] = jack_port_register(context->client, "phase", JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
 		context->out[0] = jack_port_register(context->client, "out_1", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
 		context->out[1] = jack_port_register(context->client, "out_2", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
 		context->audioSampleRate = jack_get_sample_rate(context->client);
@@ -138,7 +142,8 @@ int main(int argc, char **argv)
 
 #if RECORD
 // must be >= block size * channels
-#define RECORD_SIZE (1024 * 4)
+#define RECORD_CHANNELS 6
+#define RECORD_SIZE (1024 * RECORD_CHANNELS)
 void record(void *);
 #endif
 
@@ -193,7 +198,7 @@ bool setup(BelaContext *context, void *userData)
 #endif
 
 #if SCOPE
-	scope.setup(4, context->audioSampleRate);
+	scope.setup(6, context->audioSampleRate);
 #endif
 
 	// allocate state
@@ -207,7 +212,7 @@ bool setup(BelaContext *context, void *userData)
 #if RECORD
 	// recording
 	SF_INFO info = {0};
-	info.channels = 4;
+	info.channels = RECORD_CHANNELS;
 	info.samplerate = context->audioSampleRate;
 	info.format = SF_FORMAT_WAV | SF_FORMAT_FLOAT;
 	char record_path[100];
@@ -247,6 +252,11 @@ void render(BelaContext *context, void *userData)
 {
 	for (unsigned int n = 0; n < context->audioFrames; ++n)
 	{
+		// get audio inputs
+		float in[2] = { 0.0f, 0.0f };
+		in[0] = audioRead(context, n, 0) * 0.5f + 0.5f;
+		in[1] = audioRead(context, n, 1) * 0.5f + 0.5f;
+
 		// get controls
 
 #if MODE == MODE_REBUS
@@ -268,8 +278,9 @@ void render(BelaContext *context, void *userData)
 		const float magnitude = data[1];
 
 #elif MODE == MODE_JACK
-		const float phase = audioRead(context, n, 0) * 0.5f + 0.5f;
-		const float magnitude = audioRead(context, n, 1) * 0.5f + 0.5f;
+		const float magnitude = audioRead(context, n, 2) * 0.5f + 0.5f;
+		const float phase = audioRead(context, n, 3) * 0.5f + 0.5f;
+
 #endif
 
 		// render
@@ -301,14 +312,16 @@ void render(BelaContext *context, void *userData)
 
 		// output
 #if SCOPE
-		scope.log(out[0], out[1], magnitude, phase);
+		scope.log(out[0], out[1], in[0], in[1], magnitude, phase);
 #endif
 #if RECORD
 		// interleaved
-		S->record_out[4 * n + 0] = out[0];
-		S->record_out[4 * n + 1] = out[1];
-		S->record_out[4 * n + 2] = magnitude;
-		S->record_out[4 * n + 3] = phase;
+		S->record_out[RECORD_CHANNELS * n + 0] = out[0];
+		S->record_out[RECORD_CHANNELS * n + 1] = out[1];
+		S->record_out[RECORD_CHANNELS * n + 2] = in[0];
+		S->record_out[RECORD_CHANNELS * n + 3] = in[1];
+		S->record_out[RECORD_CHANNELS * n + 4] = magnitude;
+		S->record_out[RECORD_CHANNELS * n + 5] = phase;
 #endif
 		audioWrite(context, n, 0, out[0]);
 		audioWrite(context, n, 1, out[1]);
