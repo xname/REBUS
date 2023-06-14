@@ -2,13 +2,16 @@
 // abstracted composition core
 // this file is included by render.cpp
 
+#include <complex>
+
 //---------------------------------------------------------------------
 // composition state
 
 struct COMPOSITION
 {
-	float increment;
-	float phase[3];
+	std::complex<double> increment;
+	std::complex<double> oscillator;
+	float rms;
 };
 
 //---------------------------------------------------------------------
@@ -17,8 +20,10 @@ struct COMPOSITION
 static inline
 bool COMPOSITION_setup(BelaContext *context, struct COMPOSITION *C)
 {
-	C->increment = 50.0f / context->audioSampleRate;
-  return true;
+	C->increment = 0;
+	C->oscillator = 0;
+	C->rms = 0;
+	return true;
 }
 
 //---------------------------------------------------------------------
@@ -27,14 +32,19 @@ bool COMPOSITION_setup(BelaContext *context, struct COMPOSITION *C)
 static inline
 void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, float out[2], const float in[2], const float magnitude, const float phase)
 {
-	C->phase[0] += C->increment;
-	C->phase[1] += C->increment * (1.0f + 0.1f * phase);
-	C->phase[2] += C->increment * (1.0f - 0.1f * phase);
-	C->phase[0] -= std::floor(C->phase[0]);
-	C->phase[1] -= std::floor(C->phase[1]);
-	C->phase[2] -= std::floor(C->phase[2]);
-	out[0] = (C->phase[1] - C->phase[0]) * magnitude;
-	out[1] = (C->phase[2] - C->phase[0]) * magnitude;
+	float gain = constrain(magnitude, 0.0f, 1.0f);
+	float f = 0.25f * phase;
+	float m = expf(map(gain, 0.0f, 1.0f, logf(0.99f), logf(0.999999f)));
+	C->increment = double(m) * std::complex<double>(std::cos(f), std::sin(f));
+	C->rms *= 0.99;
+	C->rms += 0.01 * std::norm(C->oscillator);
+	if (C->rms < 3.0e-3f)
+	{
+		C->oscillator += 0.5;
+	}
+	C->oscillator *= C->increment;
+	out[0] = std::tanh(C->oscillator.real());
+	out[1] = std::tanh(C->oscillator.imag());
 }
 
 //---------------------------------------------------------------------
