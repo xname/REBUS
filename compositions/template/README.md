@@ -29,7 +29,8 @@ or add `-DMODE=1` to build options
 ### desktop with JACK (audio in port)
 
 ```
-gcc -o programname render.cpp -DMODE=2 -ljack
+gcc -o rebus render.cpp -DMODE=2 -ljack \
+  -std=c++17 -Wall -Wextra -pedantic -Wno-unused-parameter
 ```
 
 ## audio recording
