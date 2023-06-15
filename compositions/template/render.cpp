@@ -23,6 +23,12 @@
 #endif
 //---------------------------------------------------------------------
 
+//---------------------------------------------------------------------
+// set recording preference, can be overriden via compilation flags
+#ifndef RECORD
+#define RECORD 1
+#endif
+//---------------------------------------------------------------------
 
 
 #if MODE != MODE_REBUS && MODE != MODE_BELA && MODE != MODE_JACK
@@ -39,7 +45,9 @@
 #include <libraries/sndfile/sndfile.h>
 
 #define SCOPE 1
+#ifndef RECORD
 #define RECORD 1
+#endif
 
 #define GUI (MODE == MODE_BELA)
 
@@ -137,6 +145,7 @@ int main(int argc, char **argv)
 }
 
 #define SCOPE 0
+#undef RECORD
 #define RECORD 0
 #define GUI 0
 
