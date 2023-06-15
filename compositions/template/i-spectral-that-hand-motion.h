@@ -8,8 +8,8 @@
 // composition parameters
 
 #define BUFFER 65536 // bigger than BLOCK * 2, for overlap add
-#define BLOCK 4096 // power of 2, for FFT
-#define HOP 64
+#define BLOCK 1024 // power of 2, for FFT
+#define HOP 256
 #define OVERLAP (BLOCK / HOP)
 #define GAIN ((1.0f / BLOCK) * (0.5f / OVERLAP)) // fft->ifft gain * overlap-add gain
 
@@ -17,8 +17,8 @@
 
 struct COMPOSITION
 {
-	float input[BUFFER];
-	float output[BUFFER];
+	float *input; //[BUFFER];
+	float *output; //[BUFFER];
 	ne10_fft_cpx_float32_t *motion[2]; //[BLOCK];
 	ne10_fft_cpx_float32_t *synth; //[BLOCK];
 	float *block; //[BLOCK];
@@ -27,7 +27,7 @@ struct COMPOSITION
 	unsigned int input_ix;
 	unsigned int output_ix_w;
 	unsigned int output_ix_r;
-	ne10_fft_cfg_float32_t fft_config;
+	ne10_fft_r2c_cfg_float32_t fft_config;
 	unsigned int fft_output_ix_w;
 	unsigned int fft_input_ix;
 	unsigned int fft_motion_ix;
@@ -42,24 +42,24 @@ struct COMPOSITION *gC = nullptr;
 
 void COMPOSITION_process(void *)
 {
-	gC->inprocess = true;
+	COMPOSITION *C = gC;
+	C->inprocess = true;
 	// reblock and window
-	unsigned int input_ptr = (S->fft_input_ix + BUFFER - BLOCK) % BUFFER;
-	unsigned int probe_ptr = (mic_ptr + BUFFER - offset) % BUFFER;
+	unsigned int input_ptr = (C->fft_input_ix + BUFFER - BLOCK) % BUFFER;
 	for (unsigned int n = 0; n < BLOCK; ++n)
 	{
-		gC->block[n] = gC->input[input_ptr] * gC->window[n];
+		C->block[n] = C->input[input_ptr] * C->window[n];
 		++input_ptr;
 		input_ptr %= BUFFER;
 	}
 	// fft
-	ne10_fft_r2c_1d_float32_neon(gC->motion_fft[gC->motion_fft_ix], gC->block, gC->fft_config, 0);
+	ne10_fft_r2c_1d_float32_neon(C->motion[C->fft_motion_ix], C->block, C->fft_config);
 	// phase vocoder synthesizer
 	for (unsigned int n = 0; n < BLOCK; ++n)
 	{
-		std::complex<float> next(gC->motion_fft[gC->motion_fft_ix][n].r, gC->motion_fft[gC->motion_fft_ix][n].i);
-		std::complex<float> now(gC->motion_fft[! gC->motion_fft_ix][n].r, gC->motion_fft[! gC->motion_fft_ix][n].i);
-		std::complex<float> then(gC->synth[n].r, gC->synth[n].i);
+		std::complex<float> next(C->motion[C->fft_motion_ix][n].r, C->motion[C->fft_motion_ix][n].i);
+		std::complex<float> now(C->motion[! C->fft_motion_ix][n].r, C->motion[! C->fft_motion_ix][n].i);
+		std::complex<float> then(C->synth[n].r, C->synth[n].i);
 		std::complex<float> advance = next / now;
 		float a = std::abs(advance);
 		if (a == 0) advance = 1; else advance /= a;
@@ -71,21 +71,21 @@ void COMPOSITION_process(void *)
 			advance *= advance;
 		}
 		then = then * gain * advance;
-		gC->synth[n].r = then.real();
-		gC->synth[n].i = then.imag();
+		C->synth[n].r = then.real();
+		C->synth[n].i = then.imag();
 	}
+	C->fft_motion_ix = ! C->fft_motion_ix;
 	// ifft
-	ne10_fft_c2r_1d_float32_neon(gC->synth, gC->block, gC->fft_config, 1);
-
+	ne10_fft_c2r_1d_float32_neon(C->block, C->synth, C->fft_config);
 	// overlap add
-	ptr = gC->fft_output_ix_w % BUFFER;
+	unsigned int output_ptr = C->fft_output_ix_w % BUFFER;
 	for (unsigned int n = 0; n < BLOCK; ++n)
 	{
-		gC->output[ptr] += gC->block[n] * gC->window[n];
-		++ptr;
-		ptr %= BUFFER;
+		C->output[output_ptr] += C->block[n] * C->window[n];
+		++output_ptr;
+		output_ptr %= BUFFER;
 	}
-	gC->inprocess = false;
+	C->inprocess = false;
 }
 
 //---------------------------------------------------------------------
@@ -93,17 +93,18 @@ void COMPOSITION_process(void *)
 static inline
 bool COMPOSITION_setup(BelaContext *context, COMPOSITION *C)
 {
-#define NEW(ptr, count) \
-	ptr = ((decltype)(ptr)) NE10_MALLOC(sizeof(*ptr) * count); \
+	std::memset(C, 0, sizeof(*C));
+#define NEW(ptr, type, count) \
+	ptr = (type *) NE10_MALLOC(sizeof(*ptr) * count); \
 	if (! ptr) { return false; } \
 	std::memset(ptr, 0, sizeof(*ptr) * count);
-	NEW(C->input, BUFFER)
-	NEW(C->output, BUFFER)
-	NEW(C->motion[0], BLOCK)
-	NEW(C->motion[1], BLOCK)
-	NEW(C->synth, BLOCK)
-	NEW(C->block, BLOCK)
-	NEW(C->window, BLOCK)
+	NEW(C->input, float, BUFFER)
+	NEW(C->output, float, BUFFER)
+	NEW(C->motion[0], ne10_fft_cpx_float32_t, BLOCK)
+	NEW(C->motion[1], ne10_fft_cpx_float32_t, BLOCK)
+	NEW(C->synth, ne10_fft_cpx_float32_t, BLOCK)
+	NEW(C->block, float, BLOCK)
+	NEW(C->window, float, BLOCK)
 #undef NEW
 	for (unsigned int n = 0; n < BLOCK; ++n)
 	{
@@ -114,7 +115,7 @@ bool COMPOSITION_setup(BelaContext *context, COMPOSITION *C)
 	{
 		return false;
 	}
-	if (! (C->fft_config = ne10_fft_alloc_r2c_float32_neon(BLOCK)))
+	if (! (C->fft_config = ne10_fft_alloc_r2c_float32(BLOCK)))
 	{
 		return false;
 	}
@@ -131,10 +132,10 @@ void COMPOSITION_render(BelaContext *context, COMPOSITION *C, float out[2], cons
 	// read input
 	if (C->sample_ix == 0)
 	{
-		C->input[C->input_x] = phase;
+		C->input[C->input_ix] = phase;
 		// advance
 		++C->input_ix;
-		C->input_x %= BUFFER;
+		C->input_ix %= BUFFER;
 	}
 	// write output
 	float o = GAIN * magnitude * C->output[C->output_ix_r];
@@ -157,7 +158,10 @@ void COMPOSITION_render(BelaContext *context, COMPOSITION *C, float out[2], cons
 		{
 			rt_printf("TOO SLOW\n");
 		}
-		Bela_scheduleAuxiliaryTask(C->process_task);
+		else
+		{
+			Bela_scheduleAuxiliaryTask(C->process_task);
+		}
 		C->sample_ix = 0;
 	}
 }
