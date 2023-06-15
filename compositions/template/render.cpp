@@ -168,7 +168,7 @@ void record(void *);
 
 #include COMPOSITION_INCLUDE
 
-struct
+struct STATE
 {
 
 //---------------------------------------------------------------------
@@ -186,7 +186,9 @@ struct
 	unsigned int items;
 #endif
 
-} *S;
+};
+
+struct STATE *S;
 
 #if GUI
 Gui gui;
@@ -211,7 +213,7 @@ bool setup(BelaContext *context, void *userData)
 #endif
 
 	// allocate state
-	S = new(std::nothrow) decltype(S) ();
+	S = new(std::nothrow) STATE();
 	if (! S)
 	{
 		return false;
