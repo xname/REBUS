@@ -155,6 +155,7 @@ int main(int argc, char **argv)
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <new>
 
 #if RECORD
 // must be >= block size * channels
@@ -210,12 +211,11 @@ bool setup(BelaContext *context, void *userData)
 #endif
 
 	// allocate state
-	S = (decltype(S)) std::malloc(sizeof(*S));
+	S = new(std::nothrow) decltype(S) ();
 	if (! S)
 	{
 		return false;
 	}
-	std::memset(S, 0, sizeof(*S));
 
 #if RECORD
 	// recording
