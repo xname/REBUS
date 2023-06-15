@@ -42,6 +42,7 @@
 #include <libraries/Gui/Gui.h>
 #include <libraries/Scope/Scope.h>
 #include <libraries/Pipe/Pipe.h>
+#include <libraries/ne10/NE10.h>
 #include <libraries/sndfile/sndfile.h>
 
 #define SCOPE 1
