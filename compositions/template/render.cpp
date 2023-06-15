@@ -1,7 +1,7 @@
 //---------------------------------------------------------------------
 // composition to use, can be overriden via compilation flags
 #ifndef COMPOSITION_INCLUDE
-#define COMPOSITION_INCLUDE "example.h"
+#define COMPOSITION_INCLUDE "i-spectral-that-hand-motion.h"
 #endif
 //---------------------------------------------------------------------
 

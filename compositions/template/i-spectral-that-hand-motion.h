@@ -11,7 +11,7 @@
 #define BLOCK 1024 // power of 2, for FFT
 #define HOP 256
 #define OVERLAP (BLOCK / HOP)
-#define GAIN ((1.0f / BLOCK) * (0.5f / OVERLAP)) // fft->ifft gain * overlap-add gain
+#define GAIN (4.0 * (0.5f / OVERLAP)) // waveshaper gain * overlap-add gain
 
 //---------------------------------------------------------------------
 
@@ -33,6 +33,7 @@ struct COMPOSITION
 	unsigned int fft_motion_ix;
 	AuxiliaryTask process_task;
 	volatile bool inprocess;
+	float dc;
 };
 
 //---------------------------------------------------------------------
@@ -132,13 +133,20 @@ void COMPOSITION_render(BelaContext *context, COMPOSITION *C, float out[2], cons
 	// read input
 	if (C->sample_ix == 0)
 	{
-		C->input[C->input_ix] = phase;
+		C->input[C->input_ix] = 2 * phase - 1;
 		// advance
 		++C->input_ix;
 		C->input_ix %= BUFFER;
 	}
 	// write output
-	float o = GAIN * magnitude * C->output[C->output_ix_r];
+	float gain = magnitude;
+	gain *= gain;
+	gain *= 2.0f;
+	gain *= gain;
+	float o = GAIN * gain * C->output[C->output_ix_r];
+	C->dc *= 0.999f;
+	C->dc += 0.001f * o;
+	o -= C->dc;
 	out[0] = std::tanh(o);
 	out[1] = std::sin(o);
 	// reset for next overlap add
