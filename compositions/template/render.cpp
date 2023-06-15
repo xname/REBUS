@@ -349,7 +349,7 @@ void cleanup(BelaContext *context, void *userData)
 //---------------------------------------------------------------------
 
 		// free memory
-		std::free(S);
+		delete S;
 		S = nullptr;
 
 	}
