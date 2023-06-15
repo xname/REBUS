@@ -1,3 +1,10 @@
+//---------------------------------------------------------------------
+// composition to use, can be overriden via compilation flags
+#ifndef COMPOSITION_INCLUDE
+#define COMPOSITION_INCLUDE "example.h"
+#endif
+//---------------------------------------------------------------------
+
 // modes of operation (aka platform support)
 
 // BELA on REBUS hardware using control via antenna
@@ -149,7 +156,7 @@ void record(void *);
 
 // state
 
-#include "composition.h"
+#include COMPOSITION_INCLUDE
 
 struct
 {
