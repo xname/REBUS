@@ -253,8 +253,8 @@ void render(BelaContext *context, void *userData)
 	{
 		// get audio inputs
 		float in[2] = { 0.0f, 0.0f };
-		in[0] = audioRead(context, n, 0) * 0.5f + 0.5f;
-		in[1] = audioRead(context, n, 1) * 0.5f + 0.5f;
+		in[0] = audioRead(context, n, 0);
+		in[1] = audioRead(context, n, 1);
 
 		// get controls
 
@@ -277,8 +277,8 @@ void render(BelaContext *context, void *userData)
 		const float magnitude = data[1];
 
 #elif MODE == MODE_JACK
-		const float magnitude = audioRead(context, n, 2) * 0.5f + 0.5f;
-		const float phase = audioRead(context, n, 3) * 0.5f + 0.5f;
+		const float magnitude = audioRead(context, n, 2);
+		const float phase = audioRead(context, n, 3);
 
 #endif
 
