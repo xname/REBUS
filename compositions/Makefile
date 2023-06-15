@@ -1,5 +1,5 @@
 all: template.zip
 
-%.zip: %/ %/*
-	rm -f $@
+%.zip: %/ %/* Makefile
+	rm -rf $@ $</build/
 	zip -9 -r $@ $<
