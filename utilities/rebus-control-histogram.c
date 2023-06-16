@@ -62,7 +62,7 @@ int main(int argc, char **argv)
 								float magnitude = audio[info.channels * frame + 4];
 								float phase = audio[info.channels * frame + 5];
 								int x = fminf(fmaxf(phase * (width - 1) + rand() / (double) RAND_MAX, 0), width - 1);
-								int y = fminf(fmaxf(magnitude * (height - 1) + rand() / (double) RAND_MAX, 0), height - 1);
+								int y = fminf(fmaxf((1 - magnitude) * (height - 1) + rand() / (double) RAND_MAX, 0), height - 1);
 								histogram[y * width + x] += 1;
 							}
 							int64_t peak = 0;
