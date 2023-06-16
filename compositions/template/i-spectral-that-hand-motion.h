@@ -2,6 +2,14 @@
 // abstracted composition core
 // this file is included by render.cpp
 
+//---------------------------------------------------------------------
+// added to audio recording filename
+
+const char *COMPOSITION_name = "i-spectral-that-hand-motion";
+
+//---------------------------------------------------------------------
+// dependencies
+
 #include <complex>
 
 //---------------------------------------------------------------------

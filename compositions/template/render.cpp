@@ -150,12 +150,13 @@ int main(int argc, char **argv)
 #define RECORD 0
 #define GUI 0
 
-#endif
+#endif // mode specific stuff
 
 
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <time.h>
 #include <new>
 
 #if RECORD
@@ -226,8 +227,17 @@ bool setup(BelaContext *context, void *userData)
 	info.channels = RECORD_CHANNELS;
 	info.samplerate = context->audioSampleRate;
 	info.format = SF_FORMAT_WAV | SF_FORMAT_FLOAT;
-	char record_path[100];
-	snprintf(record_path, sizeof(record_path), "%08x.wav", (int) time(0));
+	char record_path[1000];
+	time_t seconds_since_epoch = time(0);
+	struct tm *t = localtime(&seconds_since_epoch);
+	if (t)
+	{
+    snprintf(record_path, sizeof(record_path), "%04d-%02d-%02d-%02d-%02d-%02d-%s.wav", 1900 + t->tm_year, t->tm_mon + 1, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec, COMPOSITION_name);
+	}
+	else
+	{
+		snprintf(record_path, sizeof(record_path), "%08x-%s.wav", (unsigned int) seconds_since_epoch, COMPOSITION_name);
+	}
 	if (! (S->out_file = sf_open(record_path, SFM_WRITE, &info)))
 	{
 		return false;
