@@ -1,4 +1,16 @@
 //---------------------------------------------------------------------
+/*
+
+I Spectral That Hand Motion
+by Claude Heiland-Allen 2023-06-15
+
+An extreme pitch shift (upwards by log2(HOP) octaves)
+turns last few seconds of phase motion into sound.
+Magnitude input adjust volume with wave-shaping distortion.
+
+*/
+
+//---------------------------------------------------------------------
 // abstracted composition core
 // this file is included by render.cpp
 

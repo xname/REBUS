@@ -1,4 +1,17 @@
 //---------------------------------------------------------------------
+/*
+
+untitled example
+by Claude Heiland-Allen 2023-04-21, 2023-06-14
+
+A complex oscillator is retriggered
+when its volume decays below a threshold.
+Magnitude controls decay.
+Phase controls pitch.
+
+*/
+
+//---------------------------------------------------------------------
 // abstracted composition core
 // this file is included by render.cpp
 

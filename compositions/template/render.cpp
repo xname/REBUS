@@ -1,4 +1,19 @@
 //---------------------------------------------------------------------
+/*
+
+REBUS - Electromagnetic Interactions
+
+https://xname.cc/rebus
+
+composition template
+by Claude Heiland-Allen 2023-06-14
+based on workshop template by xname 2023
+audio recorder based on an example found on Bela forums
+GUI mouse input based on an example found in Bela SDK
+
+*/
+
+//---------------------------------------------------------------------
 // composition to use, can be overriden via compilation flags
 #ifndef COMPOSITION_INCLUDE
 #define COMPOSITION_INCLUDE "i-spectral-that-hand-motion.h"
