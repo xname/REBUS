@@ -81,6 +81,18 @@ static inline void COMPOSITION_cleanup(BelaContext *context, struct COMPOSITION 
 
 retriggered decaying complex oscillator
 
+### untitled example with boids
+
+a flock of retriggered decaying complex oscillators
+
 ### I Spectral That Hand Motion
 
 8 octave pitch shift turns movement into sound
+
+### stringthing
+
+spinning rope physical model
+
+### Uneven Terrain
+
+techno landscape
