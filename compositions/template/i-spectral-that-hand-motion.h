@@ -174,8 +174,6 @@ void COMPOSITION_render(BelaContext *context, COMPOSITION *C, float out[2], cons
 	// write output
 	float gain = magnitude;
 	gain *= gain;
-	gain *= 2.0f;
-	gain *= gain;
 	float o = GAIN * gain * C->output[C->output_ix_r];
 	C->dc *= 0.999f;
 	C->dc += 0.001f * o;
