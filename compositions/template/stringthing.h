@@ -60,6 +60,8 @@ struct COMPOSITION
 	R rh;
 	R rb;
 	R ls;
+	R magnitude_lop;
+	R phase_lop;
 };
 
 //---------------------------------------------------------------------
@@ -115,11 +117,15 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, float out[2
 			C->buf[j][1] = std::tanh(2 * C->rb);
 		}
 	}
+	C->magnitude_lop *= 0.9999f;
+	C->magnitude_lop += 0.0001f * magnitude;
+	C->phase_lop *= 0.9999f;
+	C->phase_lop += 0.0001f * phase;
 	if (C->phase % HOP == 0)
 	{
 		// input mapping
-		R f = 2.0f * (magnitude - 0.5f);
-		R d = 4.0f * (phase - 0.5f);
+		R f = 2.0f * (C->magnitude_lop - 0.5f);
+		R d = 4.0f * (C->phase_lop - 0.5f);
 		R m = (std::pow(2, std::fabs(f)) - 1) * (f < 0 ? -1 : 1);
 		R r = std::pow(2, d);
 		C->f1 = (m * r) / 8.0;
