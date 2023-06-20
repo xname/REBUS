@@ -32,9 +32,7 @@ struct COMPOSITION
 	BIQUAD bq[2];
 	DELAY del0; float del0buf[65536];
 	DELAY del1; float del1buf[65536];
-#if MODE != MODE_REBUS
 	LOP lo[2];
-#endif
 };
 
 //---------------------------------------------------------------------
@@ -65,11 +63,10 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *s, float out[2
 	using std::cos;
 	using std::pow;
 	// smoothing to avoid zipper noise with non-REBUS controllers
+	// reduces EMI noise (?) with REBUS controller
 	float in[2] = { magnitude, phase };
-#if MODE != MODE_REBUS
 	in[0] = lop(&s->lo[0], in[0], 10);
 	in[1] = lop(&s->lo[1], in[1], 10);
-#endif
 	// drum sounds
 	sample clock = phasor(&s->clock, 2.222);
 	sample kick = sin(16 * pi * pow(1 - clock, 32));
