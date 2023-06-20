@@ -79,6 +79,10 @@ void COMPOSITION_process(void *)
 	for (unsigned int n = 0; n < BLOCK; ++n)
 	{
 		std::complex<float> next(C->motion[C->fft_motion_ix][n].r, C->motion[C->fft_motion_ix][n].i);
+		float gain = std::abs(next);
+#if 0
+		// phase vocoder phase advance
+		// has low frequency chirp artifacts
 		std::complex<float> now(C->motion[! C->fft_motion_ix][n].r, C->motion[! C->fft_motion_ix][n].i);
 		std::complex<float> then(C->synth[n].r, C->synth[n].i);
 		std::complex<float> advance = next / now;
@@ -86,12 +90,16 @@ void COMPOSITION_process(void *)
 		if (a == 0) advance = 1; else advance /= a;
 		float t = std::abs(then);
 		if (t == 0) then = 1; else then /= t;
-		float gain = std::abs(next);
 		for (unsigned int k = 1; k < HOP; k <<= 1)
 		{
 			advance *= advance;
 		}
 		then = then * gain * advance;
+#else
+		// paulstretch-style phase randomisation
+		float p = 2.0f * 3.141592653 * rand() / (float) RAND_MAX;
+		std::complex<float> then = gain * std::complex<float>(std::cos(p), std::sin(p));
+#endif
 		C->synth[n].r = then.real();
 		C->synth[n].i = then.imag();
 	}
