@@ -23,6 +23,7 @@ const char *COMPOSITION_name = "i-spectral-that-hand-motion";
 // dependencies
 
 #include <complex>
+#include "_dsp.h"
 
 //---------------------------------------------------------------------
 // composition parameters
@@ -54,6 +55,8 @@ struct COMPOSITION
 	AuxiliaryTask process_task;
 	volatile bool inprocess;
 	float dc;
+	LOP phase_lop;
+	HIP phase_hip;
 };
 
 //---------------------------------------------------------------------
@@ -159,9 +162,11 @@ static inline
 void COMPOSITION_render(BelaContext *context, COMPOSITION *C, float out[2], const float in[2], const float magnitude, const float phase)
 {
 	// read input
+	float phase_bp = 2 * phase - 1;
+	phase_bp = lop(&C->phase_lop, hip(&C->phase_hip, phase_bp, 10.0f / (float)HOP), 100.0f);
 	if (C->sample_ix == 0)
 	{
-		C->input[C->input_ix] = 2 * phase - 1;
+		C->input[C->input_ix] = phase_bp;
 		// advance
 		++C->input_ix;
 		C->input_ix %= BUFFER;
