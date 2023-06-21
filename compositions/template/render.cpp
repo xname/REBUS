@@ -69,9 +69,12 @@ GUI mouse input based on an example found in Bela SDK
 
 #elif MODE == MODE_JACK
 
+#include <cstdio>
 #include <cstdlib>
 #include <unistd.h>
 #include <jack/jack.h>
+
+#define rt_printf printf
 
 struct BelaContext
 {
