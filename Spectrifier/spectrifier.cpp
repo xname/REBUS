@@ -1,16 +1,25 @@
 /*
- *  render.cpp
- *  Eleonora Maria Irene Oreggia ((xname))
- *  REBUS is the new version of Spectrifier, now obsolete 
- *  Thanks to Andrew McPherson, Giulio Moro and the Bela team (bela.io).
- * 	Developed at Queen Mary University of London, at Media & Arts Technology DTC
- *	A collaboration between the Antennas & Electromagnetics Group and C4DM (Centre for Digital Music)
+
+ _____ _____ _____ _____ _____ 
+| __  |   __| __  |  |  |   __|
+|    -|   __| __ -|  |  |__   |
+|__|__|_____|_____|_____|_____|
+
+spectrifier.cpp
+
+Eleonora Maria Irene Oreggia ((xname)) 2017 - 2023
+Spectrifier was the CODENAME of REBUS during development. You can still enjoy it as a composition!!
+Thanks to Andrew McPherson, Giulio Moro and the Bela team (bela.io).
+Developed at Queen Mary University of London, at Media & Arts Technology DTC
+A collaboration between the Antennas & Electromagnetics Group and C4DM (Centre for Digital Music)
+
  */
 
 
 #include <Bela.h>
 #include <cmath>
 #include <unistd.h>
+#include <libraries/Scope/Scope.h>
 
 // read square wave table
 #include "square_table.h"
@@ -47,6 +56,9 @@ float pastStateOutHP = 0.0;  //gHP_a2
 
 int counter = 0;
 
+//Istantiate the virtual oscilloscope
+Scope gScope;
+
 
 bool setup(BelaContext *context, void *userData)
 {
@@ -72,6 +84,11 @@ bool setup(BelaContext *context, void *userData)
 
 	gInverseSampleRate = 1.0 / context->audioSampleRate;
 	gPhase = 0.0;
+	
+	// Set up the oscilloscope (n channels and samplerate)
+	gScope.setup(3, context->audioSampleRate);
+
+	
 	return true;
 }
 
@@ -173,6 +190,7 @@ void render(BelaContext* context, void* arg)
 	for(unsigned int n = 0; n < context->audioFrames; n++) {
 
 
+
 		// read the  PHASE 
 		float phaseReading = context->analogIn[n/2*8]; // pot value, interleaved, half audio rate
 
@@ -216,6 +234,9 @@ void render(BelaContext* context, void* arg)
 		float out=(gHP_b0*FilterIn) + (gHP_b1*prevStateInHP) + (gHP_b2*pastStateInHP) - (gHP_a1*prevStateOutHP) - (gHP_a2*pastStateOutHP);
 
 		// rt_printf("filterIn is  %f\n", filterIn);
+		
+		// send EM and audio data to Scope
+		gScope.log(gainReading, phaseReading, out);
 
 		pastStateInHP=prevStateInHP;    //store current x[n-1] that will become x[n-2]
 		prevStateInHP=FilterIn;			//store current x[n] that will become x[n-1]
@@ -231,7 +252,6 @@ void render(BelaContext* context, void* arg)
 			gPhase -= 2.0 * M_PI;
 
 		for(unsigned int channel = 0; channel < context->audioInChannels; channel++)
-//			context->audioOut[n * context->audioOutChannels + channel] = out;
 			audioWrite(context, n, channel, out);
 
 	}

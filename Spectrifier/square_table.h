@@ -1,9 +1,14 @@
 /*
- * square_table.h
- *
- *  Created on: 22 Apr 2015
- *      Author: xname ((Eleonora Oreggia))
- *      with help by Giulio Moro
+  square_table.h
+ 
+	  _____ _____ _____ _____ _____ 
+	| __  |   __| __  |  |  |   __|
+	|    -|   __| __ -|  |  |__   |
+	|__|__|_____|_____|_____|_____|
+        Created on: 22 Apr 2015
+        Author: xname ((Eleonora Oreggia))
+        with help by Giulio Moro
+
  */
 
 #ifndef SQUARE_TABLE_H_
