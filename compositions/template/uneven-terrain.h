@@ -43,7 +43,7 @@ bool COMPOSITION_setup(BelaContext *context, struct COMPOSITION *C)
 {
 	if (context->audioSampleRate != SR)
 	{
-		rt_printf("warning: using %f, expected %f\n", context->audioSampleRate, SR);
+		rt_printf("warning: using %f, expected %f\n", (double) context->audioSampleRate, (double) SR);
 	}
 	std::memset(C, 0, sizeof(*C));
 	highpass(&C->bq[0], 32, 12);
