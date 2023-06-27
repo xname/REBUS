@@ -24,7 +24,7 @@ const char *COMPOSITION_name = "dub-terrain";
 //---------------------------------------------------------------------
 // dependencies
 
-#include "_dsp.h"
+#include "_dsp_neon.h"
 
 //---------------------------------------------------------------------
 // composition state
@@ -41,7 +41,7 @@ struct COMPOSITION
 	BIQUAD bq[2];
 	DLINE del[2];
 	LOPF lo[2];
-	VCFF bp[4][2];
+	VCF4 bp[2];
 };
 
 //---------------------------------------------------------------------
@@ -69,66 +69,55 @@ static inline
 void COMPOSITION_render(BelaContext *context, struct COMPOSITION *s, float out[2], const float in_audio[2], const float magnitude, const float phase)
 {
 	static const int prime[4] = { 2, 3, 5, 7 };
-	using std::sin;
-	using std::cos;
-	using std::pow;
+	static const sample4 prime2pi = { 2 * float(twopi), 3 * float(twopi), 5 * float(twopi), 7 * float(twopi) };
+	const sample4 one = vmovq_n_f32(1.0f);
 	// smoothing to avoid zipper noise with non-REBUS controllers
 	// reduces EMI noise (?) with REBUS controller
 	float in[2] = { magnitude, phase };
 	in[0] = lopf(&s->lo[0], in[0], 10);
 	in[1] = lopf(&s->lo[1], in[1], 10);
 	float m = clamp(in[0], 0, 1);
-	float p = clamp(in[1], 0, 1) * float(twopi);
+	float p = clamp(in[1], 0, 1);
 	// drum sounds
 	sample tempo = 0.4;
 	sample clock = phasor(&s->clock, tempo);
-	sample kick = sinf(32 * float(pi) * pow(1 - clock, 64));
+	clock = 1 - clock;
+	clock *= clock;
+	clock *= clock;
+	clock *= clock;
+	clock *= clock;
+	clock *= clock;
+	clock *= clock;
+	sample kick = sinf(32 * float(pi) * clock);
 	sample bass = kick - biquad(&s->bq[0], kick);
 	sample sub = biquad(&s->bq[1], kick);
-	sample fb[4][2];
-	sample cop[4];
-	sample sip[4];
+	// rotate delayed feedback in stereo field
+	sample4 sip, cop;
+	sincos4(sip, cop, vmulq_n_f32(prime2pi, p));
+	sample4 fb0, fb1;
 	for (int i = 0; i < 4; ++i)
 	{
-		for (int j = 0; j < 2; ++j)
-		{
-			fb[i][j] = delread1(&s->del[j].del, 1000 / tempo * 1 / (i + 1.5));
-		}
-		cop[i] = cosf(prime[i] * p);
-		sip[i] = sinf(prime[i] * p);
-		sample tmp[2] = { cop[i] * fb[i][0] - sip[i] * fb[i][1], sip[i] * fb[i][0] + cop[i] * fb[i][1] };
-		fb[i][0] = tmp[0];
-		fb[i][1] = tmp[1];
+		fb0[i] = delread1(&s->del[0].del, 1000 / tempo * 1 / (i + 1.5));
+		fb1[i] = delread1(&s->del[1].del, 1000 / tempo * 1 / (i + 1.5));
 	}
+	sample4 tmp0 = vsubq_f32(vmulq_f32(cop, fb0), vmulq_f32(sip, fb1));
+	sample4 tmp1 = vaddq_f32(vmulq_f32(sip, fb0), vmulq_f32(cop, fb1));
+	fb0 = tmp0;
+	fb1 = tmp1;
+	// resonant bandpass filters
+	sample q = 3;
+	sample4 gain, ignored;
+	sincos4(gain, ignored, vmulq_n_f32(prime2pi, m));
+	sample4 hz = mtof4(vaddq_f32(vmulq_n_f32(vmulq_n_f32(vsubq_f32(one, cop), 0.5f), 84.0f - 36.0f), vmovq_n_f32(36.0f)));
+	{ sample t = hz[3]; hz[3] = hz[0]; hz[0] = t; }
+	{ sample t = hz[2]; hz[2] = hz[1]; hz[1] = t; }
+	fb0 = vcf4(&s->bp[0], vmulq_f32(gain, fb0), hz, q);
+	fb1 = vcf4(&s->bp[1], vmulq_f32(gain, fb1), hz, q);
 	// waveshaping / mixing
 	sample g = 0.5 * sinf(float(pi) * m);
-	sample q = 3;
-	sample gm[4], gp[4];
-	m *= float(twopi);
-	for (int i = 0; i < 4; ++i)
-	{
-		gm[i] = sinf(prime[i] * m);
-		gp[i] = mtof(mix(36, 84, 0.5 * (1 - cop[i])));
-	}
-	sample common =
-		( 3 * kick
-		+ 2 * bass
-		+ 4 * sub
-		) * g;
-	out[0] = sinf
-		( common
-		+ vcff(&s->bp[0][0], gm[0] * fb[0][0], gp[3], q)
-		+ vcff(&s->bp[1][0], gm[1] * fb[1][0], gp[2], q)
-		+ vcff(&s->bp[2][0], gm[2] * fb[2][0], gp[1], q)
-		+ vcff(&s->bp[3][0], gm[3] * fb[3][0], gp[0], q)
-		);
-	out[1] = sinf
-		( common
-		+ vcff(&s->bp[0][1], gm[0] * fb[0][1], gp[3], q)
-		+ vcff(&s->bp[1][1], gm[1] * fb[1][1], gp[2], q)
-		+ vcff(&s->bp[2][1], gm[2] * fb[2][1], gp[1], q)
-		+ vcff(&s->bp[3][1], gm[3] * fb[3][1], gp[0], q)
-		);
+	sample common = (3 * kick + 2 * bass + 4 * sub) * g;
+	out[0] = sinf(common + fb0[0] + fb0[1] + fb0[2] + fb0[3]);
+	out[1] = sinf(common + fb1[0] + fb1[1] + fb1[2] + fb1[3]);
 	delwrite(&s->del[0].del, out[0]);
 	delwrite(&s->del[1].del, out[1]);
 }
