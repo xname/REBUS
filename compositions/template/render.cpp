@@ -76,6 +76,30 @@ GUI mouse input based on an example found in Bela SDK
 
 #define rt_printf printf
 
+// begin Bela Utilities.h
+
+static inline float map(float x, float in_min, float in_max, float out_min, float out_max)
+{
+	return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+static inline float constrain(float x, float min_val, float max_val)
+{
+	if(x < min_val) return min_val;
+	if(x > max_val) return max_val;
+	return x;
+}
+
+static inline float max(float x, float y){
+	return x > y ? x : y;
+}
+
+static inline float min(float x, float y){
+	return x < y ? x : y;
+}
+
+// end Bela Utilities.h
+
 struct BelaContext
 {
 	jack_client_t *client;
