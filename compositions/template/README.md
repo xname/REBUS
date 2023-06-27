@@ -45,7 +45,28 @@ important notes:
 ```
 g++ -o rebus render.cpp -DMODE=2 -ljack \
   -std=c++17 -Wall -Wextra -pedantic -Wno-unused-parameter
+./rebus
 ```
+
+connect ports in JACK patchbay of choice
+
+important notes:
+
+- currently broken for all but absolutely trivial examples
+
+- provided for experimental purposes only
+
+### desktop with SNDFILE (audio file input)
+
+```
+g++ -o rebus render.cpp -DMODE=3 -lsndfile \
+  -std=c++17 -Wall -Wextra -pedantic -Wno-unused-parameter
+./rebus in.wav out.wav
+```
+
+both audio files are 6 channels
+with same layout as Bela recordings
+(see below).
 
 important notes:
 

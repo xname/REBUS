@@ -10,13 +10,14 @@ by Claude Heiland-Allen 2023-06-14
 based on workshop template by xname 2023
 audio recorder based on an example found on Bela forums
 GUI mouse input based on an example found in Bela SDK
+MODE_SNDFILE added 2023-06-27
 
 */
 
 //---------------------------------------------------------------------
 // composition to use, can be overriden via compilation flags
 #ifndef COMPOSITION_INCLUDE
-#define COMPOSITION_INCLUDE "i-spectral-that-hand-motion.h"
+#define COMPOSITION_INCLUDE "example.h"
 #endif
 //---------------------------------------------------------------------
 
@@ -30,6 +31,9 @@ GUI mouse input based on an example found in Bela SDK
 
 // JACK client for desktop using control via audio input
 #define MODE_JACK 2
+
+// offline operation using control via audio sound file input
+#define MODE_SNDFILE 3
 
 //---------------------------------------------------------------------
 // set mode here, can be overriden via compilation flags
@@ -46,7 +50,7 @@ GUI mouse input based on an example found in Bela SDK
 //---------------------------------------------------------------------
 
 
-#if MODE != MODE_REBUS && MODE != MODE_BELA && MODE != MODE_JACK
+#if MODE != MODE_REBUS && MODE != MODE_BELA && MODE != MODE_JACK && MODE != MODE_SNDFILE
 #error unknown MODE
 #endif
 
@@ -67,12 +71,18 @@ GUI mouse input based on an example found in Bela SDK
 
 #define GUI (MODE == MODE_BELA)
 
-#elif MODE == MODE_JACK
+#elif MODE == MODE_JACK || MODE == MODE_SNDFILE
 
 #include <cstdio>
 #include <cstdlib>
 #include <unistd.h>
+#if MODE == MODE_JACK
 #include <jack/jack.h>
+#endif
+#if MODE == MODE_SNDFILE
+typedef int jack_nframes_t;
+#include <sndfile.h>
+#endif
 
 #define rt_printf printf
 
@@ -102,11 +112,21 @@ static inline float min(float x, float y){
 
 struct BelaContext
 {
+#if MODE == MODE_JACK
 	jack_client_t *client;
 	jack_port_t *in[4];
 	jack_port_t *out[2];
+#endif
 
-	const float *in_buffer[4];
+#if MODE == MODE_SNDFILE
+#define SF_CHANNELS 6
+#define SF_BLOCKSIZE 1024
+	SF_INFO info, outfo;
+	SNDFILE *in, *out;
+	float buffer[SF_BLOCKSIZE][SF_CHANNELS];
+#endif
+
+	float *in_buffer[4];
 	float *out_buffer[2];
 
 	unsigned int audioFrames;
@@ -130,6 +150,7 @@ inline void audioWrite(BelaContext *context, unsigned int frame, unsigned int ch
 int process(jack_nframes_t nframes, void *arg)
 {
 	BelaContext *context = (BelaContext *) arg;
+#if MODE == MODE_JACK
 	context->in_buffer[0] = (const float *) jack_port_get_buffer(context->in[0], nframes);
 	context->in_buffer[1] = (const float *) jack_port_get_buffer(context->in[1], nframes);
 	context->in_buffer[2] = (const float *) jack_port_get_buffer(context->in[2], nframes);
@@ -138,6 +159,31 @@ int process(jack_nframes_t nframes, void *arg)
 	context->out_buffer[1] = (float *) jack_port_get_buffer(context->out[1], nframes);
 	context->audioFrames = nframes;
 	render(context, nullptr);
+#endif
+
+#if MODE == MODE_SNDFILE
+	while (nframes > 0)
+	{
+		int count = nframes > SF_BLOCKSIZE ? SF_BLOCKSIZE : nframes;
+		sf_readf_float(context->in, &context->buffer[0][0], count);
+		nframes -= count;
+		for (int i = 0; i < count; ++i)
+		{
+			context->in_buffer[0][i] = context->buffer[i][2];
+			context->in_buffer[1][i] = context->buffer[i][3];
+			context->in_buffer[2][i] = context->buffer[i][4];
+			context->in_buffer[3][i] = context->buffer[i][5];
+		}
+		context->audioFrames = count;
+		render(context, nullptr);
+		for (int i = 0; i < count; ++i)
+		{
+			context->buffer[i][0] = context->out_buffer[0][i];
+			context->buffer[i][1] = context->out_buffer[1][i];
+		}
+		sf_writef_float(context->out, &context->buffer[0][0], count);
+	}
+#endif
 	return 0;
 }
 
@@ -152,6 +198,8 @@ int main(int argc, char **argv)
 	{
 		return retval;
 	}
+
+#if MODE == MODE_JACK
 	context->client = jack_client_open("REBUS", JackOptions(0), nullptr);
 	if (context->client)
 	{
@@ -183,6 +231,41 @@ int main(int argc, char **argv)
 		jack_port_unregister(context->client, context->out[1]);
 		jack_client_close(context->client);
 	}
+#endif
+
+#if MODE == MODE_SNDFILE
+	if (argc == 3)
+	{
+		context->in_buffer[0] = new float[SF_BLOCKSIZE];
+		context->in_buffer[1] = new float[SF_BLOCKSIZE];
+		context->in_buffer[2] = new float[SF_BLOCKSIZE];
+		context->in_buffer[3] = new float[SF_BLOCKSIZE];
+		context->out_buffer[0] = new float[SF_BLOCKSIZE];
+		context->out_buffer[1] = new float[SF_BLOCKSIZE];
+		if ((context->in = sf_open(argv[1], SFM_READ, &context->info)))
+		{
+			if (context->info.channels == 6)
+			{
+				context->audioSampleRate = context->info.samplerate;
+				context->outfo.samplerate = context->info.samplerate;
+				context->outfo.channels = context->info.channels;
+				context->outfo.format = SF_FORMAT_WAV | SF_FORMAT_FLOAT;
+				if ((context->out = sf_open(argv[2], SFM_WRITE, &context->outfo)))
+				{
+					if (setup(context, nullptr))
+					{
+						process(context->info.frames, context);
+						retval = 0;
+						cleanup(context, nullptr);
+					}
+					sf_close(context->out);
+				}
+			}
+			sf_close(context->in);
+		}
+	}
+#endif
+
 	std::free(context);
 	return retval;
 }
@@ -274,7 +357,7 @@ bool setup(BelaContext *context, void *userData)
 	struct tm *t = localtime(&seconds_since_epoch);
 	if (t)
 	{
-    snprintf(record_path, sizeof(record_path), "%04d-%02d-%02d-%02d-%02d-%02d-%s.wav", 1900 + t->tm_year, t->tm_mon + 1, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec, COMPOSITION_name);
+		snprintf(record_path, sizeof(record_path), "%04d-%02d-%02d-%02d-%02d-%02d-%s.wav", 1900 + t->tm_year, t->tm_mon + 1, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec, COMPOSITION_name);
 	}
 	else
 	{
@@ -329,7 +412,7 @@ void render(BelaContext *context, void *userData)
 		const float phase = data[0];
 		const float magnitude = data[1];
 
-#elif MODE == MODE_JACK
+#elif MODE == MODE_JACK || MODE == MODE_SNDFILE
 		const float magnitude = audioRead(context, n, 2);
 		const float phase = audioRead(context, n, 3);
 
