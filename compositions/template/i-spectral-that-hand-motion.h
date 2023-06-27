@@ -62,6 +62,7 @@ struct COMPOSITION
 //---------------------------------------------------------------------
 // FFT process
 
+// global composition pointer (set in setup function)
 struct COMPOSITION *gC = nullptr;
 
 void COMPOSITION_process(void *)
@@ -79,13 +80,13 @@ void COMPOSITION_process(void *)
 	// fft
 	ne10_fft_r2c_1d_float32_neon(C->motion[C->fft_motion_ix], C->block, C->fft_config);
 	// phase vocoder synthesizer
-	for (unsigned int n = 0; n < BLOCK; ++n)
+	for (unsigned int n = 0; n < BLOCK; ++n) // TODO exploit real FFT symmetry
 	{
 		std::complex<float> next(C->motion[C->fft_motion_ix][n].r, C->motion[C->fft_motion_ix][n].i);
 		float gain = std::abs(next);
 #if 0
 		// phase vocoder phase advance
-		// has low frequency chirp artifacts
+		// has strange uncontrolled low frequency chirp artifacts
 		std::complex<float> now(C->motion[! C->fft_motion_ix][n].r, C->motion[! C->fft_motion_ix][n].i);
 		std::complex<float> then(C->synth[n].r, C->synth[n].i);
 		std::complex<float> advance = next / now;
@@ -93,6 +94,7 @@ void COMPOSITION_process(void *)
 		if (a == 0) advance = 1; else advance /= a;
 		float t = std::abs(then);
 		if (t == 0) then = 1; else then /= t;
+		// not sure if it should be advance**log2(HOP) (easy) or advance**(1/log2(HOP)) (hard)...
 		for (unsigned int k = 1; k < HOP; k <<= 1)
 		{
 			advance *= advance;
@@ -100,6 +102,7 @@ void COMPOSITION_process(void *)
 		then = then * gain * advance;
 #else
 		// paulstretch-style phase randomisation
+		// a bit spacier but no unpleasant artifacts
 		float p = 2.0f * 3.141592653 * rand() / (float) RAND_MAX;
 		std::complex<float> then = gain * std::complex<float>(std::cos(p), std::sin(p));
 #endif
@@ -125,6 +128,7 @@ void COMPOSITION_process(void *)
 static inline
 bool COMPOSITION_setup(BelaContext *context, COMPOSITION *C)
 {
+	// allocate aligned buffers
 	std::memset(C, 0, sizeof(*C));
 #define NEW(ptr, type, count) \
 	ptr = (type *) NE10_MALLOC(sizeof(*ptr) * count); \
@@ -138,10 +142,12 @@ bool COMPOSITION_setup(BelaContext *context, COMPOSITION *C)
 	NEW(C->block, float, BLOCK)
 	NEW(C->window, float, BLOCK)
 #undef NEW
+	// raised cosine window
 	for (unsigned int n = 0; n < BLOCK; ++n)
 	{
 		C->window[n] = (1 - std::cos(2 * M_PI * n / BLOCK)) / 2;
 	}
+	// FFT task runs at lower priority possibly taking several DSP blocks to complete
 	C->output_ix_w = HOP;
 	if (! (C->process_task = Bela_createAuxiliaryTask(&COMPOSITION_process, 90, "fft-process")))
 	{
@@ -162,22 +168,26 @@ static inline
 void COMPOSITION_render(BelaContext *context, COMPOSITION *C, float out[2], const float in[2], const float magnitude, const float phase)
 {
 	// read input
+	// band-pass filter (hip to avoid DC offsets, lop to avoid aliasing)
 	float phase_bp = 2 * phase - 1;
 	phase_bp = lop(&C->phase_lop, hip(&C->phase_hip, phase_bp, 10.0f / (float)HOP), 100.0f);
 	if (C->sample_ix == 0)
 	{
+		// decimate (one sample per HOP)
 		C->input[C->input_ix] = phase_bp;
 		// advance
 		++C->input_ix;
 		C->input_ix %= BUFFER;
 	}
-	// write output
+	// amplify
 	float gain = magnitude;
 	gain *= gain;
 	float o = GAIN * gain * C->output[C->output_ix_r];
+	// simple dc-blocking high pass filter
 	C->dc *= 0.999f;
 	C->dc += 0.001f * o;
 	o -= C->dc;
+	// write output with waveshaping
 	out[0] = std::tanh(o);
 	out[1] = std::sin(o);
 	// reset for next overlap add
