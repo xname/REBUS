@@ -3,6 +3,7 @@
 //---------------------------------------------------------------------
 // dsp stuff ported from clive
 // by Claude Heiland-Allen 2023-06-19
+// added float-specialisations 2023-06-27
 
 //---------------------------------------------------------------------
 // common defs
@@ -223,11 +224,36 @@ static inline sample vcf(VCF *s, sample x, sample hz, sample q) {
   return s->re;
 }
 
+typedef struct { float re, im; } VCFF;
+
+static inline sample vcff(VCFF *s, sample x, sample hz, sample q) {
+  float qinv = q > 0 ? 1 / q : 0;
+  float ampcorrect = 2 - 2 / (q + 2);
+  float cf = hz * twopi / SR;
+  if (cf < 0) { cf = 0; }
+  float r = qinv > 0 ? 1 - cf * qinv : 0;
+  if (r < 0) { r = 0; }
+  float oneminusr = 1 - r;
+  float cre = r * cosf(cf);
+  float cim = r * sinf(cf);
+  float re2 = s->re;
+  s->re = ampcorrect * oneminusr * x + cre * re2 - cim * s->im;
+  s->im = cim * re2 + cre * s->im;
+  return s->re;
+}
+
 typedef struct { double y; } LOP;
 
 static inline sample lop(LOP *s, sample x, sample hz) {
   double c = clamp(twopi * hz / SR, 0, 1);
   return s->y = mix(x, s->y, 1 - c);
+}
+
+typedef struct { float y; } LOPF;
+
+static inline sample lopf(LOPF *s, sample x, sample hz) {
+  float c = clamp((float(twopi) / SR) * hz, 0, 1);
+  return s->y = mix(s->y, x, c);
 }
 
 typedef struct { double y; } HIP;
