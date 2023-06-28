@@ -82,15 +82,21 @@ bool COMPOSITION_setup(BelaContext *context, COMPOSITION *C)
 	return true;
 }
 
+inline
 float square(float phase){
 	//  TODO:
 	// - use different tables for different frequency ranges so no aliasing
 
 	// stay in range
+phase /= (2.0 * M_PI);
+phase -= floorf(phase);
+phase *= (2.0 * M_PI);
+#if 0
 	while(phase >= 2.0 * M_PI)
 	            phase -= 2.0 * M_PI;
 	while(phase < 0)
 	            phase +=2.0*M_PI;
+#endif
 
 	//map phase to table length
 	float fracIndex=(phase/(2*M_PI) * squareTableLength);
@@ -124,6 +130,7 @@ float square(float phase){
 	return out;
 } 
 
+inline
 void spectrify(COMPOSITION *C, float phaseReading, float gainReading){
 	// it receives phase and gain from the VNA
 	// transforms the GPIO input phase reading from Voltage to radiant
@@ -137,10 +144,15 @@ void spectrify(COMPOSITION *C, float phaseReading, float gainReading){
     C->gEmPhase = (- phaseVoltage * 100 +180)/180 * M_PI; // negative slope therefore minus, approx 0.03 to 0
 
 	// stay in range
+C->gEmPhase /= (2.0 * M_PI);
+C->gEmPhase -= floorf(C->gEmPhase);
+C->gEmPhase *= (2.0 * M_PI);
+#if 0
 	while(C->gEmPhase >= 2.0 * M_PI)
 	            C->gEmPhase -= 2.0 * M_PI;
 	while(C->gEmPhase < 0)
 	            C->gEmPhase +=2.0 * M_PI;
+#endif
 
 	float gainVoltage = gainReading *  gADCFullScale;
 	C->gEmGain =  gainVoltage * (gMaxGain - gMinGain) + gMinGain;
@@ -171,10 +183,9 @@ void spectrify(COMPOSITION *C, float phaseReading, float gainReading){
 	out*=5;
 	return out; */
 
-
+inline
 void COMPOSITION_render(BelaContext* context, COMPOSITION *C, float out[2], const float in[2], float mapped_magnitude, float mapped_phase)
 {
-#if MODE == MODE_REBUS
 	// these must match the magic numbers in render.cpp
 	// to correctly undo the template's mapping
 	// and reconstruct the analog readings
@@ -184,11 +195,6 @@ void COMPOSITION_render(BelaContext* context, COMPOSITION *C, float out[2], cons
 	const float magnitude_max = 0.3;
 	float phaseReading = map(mapped_phase, 0, 1, phase_min, phase_max);
 	float gainReading = map(mapped_magnitude, 0, 1, magnitude_min, magnitude_max);
-#else
-	// not a physical mapping
-	float phaseReading = mapped_phase;
-	float gainReading = mapped_magnitude;
-#endif
 
 		// read the  PHASE 
 		float phaseVoltage = phaseReading * gADCFullScale;  //4.096 full scale value of the converter of matrixIn
