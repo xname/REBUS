@@ -57,14 +57,36 @@ void render(BelaContext *context, void *userData)
 
     	// read GAIN (PIN_4) and PHASE (PIN_0)
     	float gainReading = analogRead(context, n/2, 4);
-	float phaseReading = analogRead(context, n/2, 0);
+			float phaseReading = analogRead(context, n/2, 0);
 
-	// send EM and audio data to Scope
-	gScope.log(gainReading, phaseReading, out);
+		/* Mapping example 
+		
+			// map EM phase to frequency and keep it in range
+			float frequency = map(phaseReading, gMinPhase, gMaxPhase, 100, 1000);
+			frequency = constrain(frequency, 100.0, 1000.0);
 
- 	// your code
+			// map EM gain to amplitude and keep it in range		
+			float amplitude = map(gainReading, gMinGain, gMaxGain, 0, 1);
+			amplitude = constrain(amplitude, 0, 1); 
 
-	// Write the sample to every audio output channel            
+		*/	
+
+      // use console to check kabbalah
+			if(counter == 900) {
+			rt_printf("gainReading is  %f\n", gainReading);
+			//rt_printf("amplitude is  %f\n", amplitude);
+			rt_printf("phaseReading is  %f\n", phaseReading);
+			//rt_printf("frequency is  %f\n", frequency);
+				counter = 0;
+			}
+			counter++;
+
+			// send EM and audio data to Scope
+			gScope.log(gainReading, phaseReading, out);
+
+ 			// your code here
+
+			// Write the sample to every audio output channel            
     	for(unsigned int channel = 0; channel < context->audioOutChannels; channel++) {
     		audioWrite(context, n, channel, out);
     	}
