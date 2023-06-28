@@ -2,7 +2,7 @@
 /*
 
 Uneven Terrain
-by Claude Heiland-Allen 2023-06-19
+by Claude Heiland-Allen 2023-06-19, 2023-06-28
 
 Techno with waveshaping and filters.
 Phase and magnitude control many things in a non-uniform way.
@@ -33,6 +33,9 @@ struct COMPOSITION
 	DELAY del0; float del0buf[65536];
 	DELAY del1; float del1buf[65536];
 	LOP lo[2];
+	SAMPHOLD snare[2];
+	HIP hat[2];
+	HIP fb[2];
 };
 
 //---------------------------------------------------------------------
@@ -68,34 +71,68 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *s, float out[2
 	in[0] = lop(&s->lo[0], in[0], 10);
 	in[1] = lop(&s->lo[1], in[1], 10);
 	// drum sounds
-	sample clock = phasor(&s->clock, 2.222);
-	sample kick = sin(16 * pi * pow(1 - clock, 32));
-	sample bass = kick - biquad(highpass(&s->bq[0], 32, 12), kick);
-	sample sub = biquad(lowpass(&s->bq[1], 48, 100), kick);
+	sample clock = phasor(&s->clock, 2.222 / 2);
+	sample hat = 1 - wrap(8 * clock);
+	hat *= hat;
+	hat *= hat;
+	hat *= hat;
+	hat *= hat;
+	hat *= clamp(sinf(7 * float(twopi) * in[0]), 0, 1);
+	sample hats[2] =
+		{ hip(&s->hat[0], noise() * hat, 4000)
+		, hip(&s->hat[1], noise() * hat, 4000)
+		};
+	sample snare = 1 - wrap(clock - 0.5);
+	snare *= snare;
+	snare *= snare;
+	snare *= snare;
+	snare *= snare;
+	snare *= snare;
+	snare *= snare + 1;
+	snare *= clamp(sinf(6 * float(twopi) * in[0]), 0, 1);
+	sample snhz = mix(1000, 2000, 0.5 * (1.0 - cosf(6 * float(twopi) * in[0])));
+	sample snares[2] =
+		{ samphold(&s->snare[0], noise(), wrap(snhz * clock - 0.25)) * snare
+		, samphold(&s->snare[1], noise(), wrap(snhz * clock + 0.25)) * snare
+		};
+	sample kick = 1 - wrap(2 * clock);
+	kick *= kick;
+	kick *= kick;
+	kick *= kick;
+	kick *= kick;
+	kick *= kick;
+	kick = sinf(16 * float(pi) * kick);
+	sample bass = kick - biquad(&s->bq[0], kick);
+	sample sub = biquad(&s->bq[1], kick);
+	sample fbhz = mix(64, 512, 0.5f * (1 - cosf(5 * float(twopi) * (in[0] + in[1]))));
 	sample fb0[2] =
-	{ delread4(&s->del0, 1000 / 2.222 * 1 / 3)
-	, delread4(&s->del1, 1000 / 2.222 * 1 / 3)
+	{ delread1(&s->del0, 1000 / fbhz)
+	, delread1(&s->del1, 1000 / fbhz)
 	};
-	sample co = cos(twopi * in[1]);
-	sample si = sin(twopi * in[1]);
+	fb0[0] = hip(&s->fb[0], fb0[0], 100);
+	fb0[1] = hip(&s->fb[1], fb0[1], 100);
+	sample co = cosf(float(twopi) * in[1]);
+	sample si = sinf(float(twopi) * in[1]);
 	sample fb[2] = { co * fb0[0] - si * fb0[1], si * fb0[0] + co * fb0[1] };
 	// waveshaping / mixing
-	out[0] = sin
-	(	( 3 * sin(7 * twopi * in[1]) * kick
-		+ 2 * sin(5 * sin(3 * twopi * in[1]) * bass + pi * sin(3 * twopi * in[0]))
-		+ 4 * sin(5 * twopi * in[0]) * sub
-		+ 2 * sin(6 * twopi * in[0]) * fb[0]
-		) * 0.5
+	out[0] = sinf
+	(	( 3 * sinf(7 * float(twopi) * in[1]) * kick
+		+ 2 * sinf(5 * sinf(3 * float(twopi) * in[1]) * bass + float(pi) * sinf(3 * float(twopi) * in[0]))
+		+ 4 * sinf(5 * float(twopi) * in[0]) * sub
+		+ 3 * sinf(6 * float(twopi) * in[0]) * fb[0]
+		+ snares[0] + hats[0]
+		) * 0.5f
 	);
 	out[1] = sin
-	(	( 3 * sin(5 * twopi * in[1]) * kick
-		+ 2 * sin(5 * sin(4 * twopi * in[1]) * bass + pi * sin(4 * twopi * in[0]))
-		+ 4 * sin(7 * twopi * in[0]) * sub
-		+ 2 * sin(8 * twopi * in[0]) * fb[1]
-		) * 0.5
+	(	( 3 * sinf(5 * float(twopi) * in[1]) * kick
+		+ 2 * sinf(5 * sinf(4 * float(twopi) * in[1]) * bass + float(pi) * sinf(4 * float(twopi) * in[0]))
+		+ 4 * sinf(7 * float(twopi) * in[0]) * sub
+		+ 3 * sinf(8 * float(twopi) * in[0]) * fb[1]
+		+ snares[1] + hats[1]
+		) * 0.5f
 	);
-	delwrite(&s->del0, out[0]);
-	delwrite(&s->del1, out[1]);
+	delwrite(&s->del0, out[0] + snares[0]);
+	delwrite(&s->del1, out[1] + snares[1]);
 }
 
 //---------------------------------------------------------------------
