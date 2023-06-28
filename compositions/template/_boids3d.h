@@ -1,3 +1,5 @@
+#pragma once
+
 /*
 
 	boids3d 2005 - 2006 a.sier / jasch 
@@ -18,9 +20,14 @@
 	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 */
 
+#if 0
 #include 	"m_pd.h"
+#endif
 #include	<stdlib.h>
 #include	<math.h>
+
+#define double float
+#define t_float float
 
 // constants
 #define			kAssistInlet	1
@@ -85,8 +92,10 @@ typedef struct _Boid {
 } t_one_boid, *BoidPtr;
 
 typedef struct _FlockObject {
+#if 0
 	t_object	ob;
 	void		*out1, *out2;
+#endif
 	short		mode;
 	long		numBoids;
 	long		numNeighbors;
@@ -110,11 +119,14 @@ typedef struct _FlockObject {
 	double 		d2r, r2d;
 } t_boids, *FlockPtr;
 
-
+#if 0
 t_symbol 	*ps_nothing;
 
 void *boids3d_class;
 void *Flock_new(t_symbol *s, long argc, t_atom *argv);
+#else
+t_boids *Flock_new(int count);
+#endif
 void Flock_free(t_boids *x);
 void Flock_bang(t_boids *x);
 void Flock_dump(t_boids *x);
@@ -133,8 +145,14 @@ void Flock_speedupFactor(t_boids *x, t_float arg);
 void Flock_inertiaFactor(t_boids *x, t_float arg);
 void Flock_accelFactor(t_boids *x, t_float arg);
 void Flock_prefDist(t_boids *x, t_float arg);
+#if 0
 void Flock_flyRect(t_boids *x, t_symbol *msg, short argc, t_atom *argv);
 void Flock_attractPt(t_boids *x, t_symbol *msg, short argc, t_atom *argv);
+#else
+void Flock_flyRect(t_boids *x, t_float xlo, t_float ylo, t_float zlo, t_float xhi, t_float yhi, t_float zhi);
+void Flock_attractPt(t_boids *x, t_float ax, t_float ay, t_float az);
+#endif
+
 void Flock_reset(t_boids *x);
 void Flock_resetBoids(t_boids *x);
 void InitFlock(t_boids *x);
@@ -148,6 +166,7 @@ void NormalizeVelocity(Velocity *direction);
 double RandomInt(double minRange, double maxRange);
 double DistSqrToPt(Point3d firstPoint, Point3d secondPoint);
 
+#if 0
 void boids3d_setup(void)
 {
 	boids3d_class = class_new(gensym("boids3d"), (t_newmethod)Flock_new, 
@@ -175,30 +194,42 @@ void boids3d_setup(void)
 	class_addmethod(boids3d_class, (t_method) Flock_reset, 				gensym("init"), 		0);
 	class_addmethod(boids3d_class, (t_method) Flock_dump, 				gensym("dump"), 		0);
 	
-	post("boids3d 2005-2006 a.sier / jasch   © 1995-2003 eric l. singer   "__DATE__" "__TIME__);	
+	post("boids3d 2005-2006 a.sier / jasch   ï¿½ 1995-2003 eric l. singer   "__DATE__" "__TIME__);	
 	ps_nothing = gensym("");
 }
+#endif
 
-
+#if 0
 void *Flock_new(t_symbol *s, long argc, t_atom *argv)
-{	
+#else
+t_boids *Flock_new(int count)
+#endif
+{
+#if 0	
 	t_boids *x = (t_boids *)pd_new(boids3d_class);
 	x->out1 = outlet_new(&x->ob, NULL);
 	x->out2 = outlet_new(&x->ob, NULL);
-	
 	x->numBoids = 16;
+#else
+	t_boids *x = (t_boids *)calloc(1, sizeof(t_boids));
+	x->numBoids = count;
+#endif
+#if 0
 	if((argc >= 1) && (argv[0].a_type == A_FLOAT)){
 		x->numBoids = argv[0].a_w.w_float;
 	}
-	x->boid = (t_one_boid *)malloc(sizeof(t_one_boid) * x->numBoids);
+#endif
+	x->boid = (t_one_boid *)calloc(1, sizeof(t_one_boid) * x->numBoids);
 	
 	InitFlock(x);
 	
 	x->mode = 0;
+#if 0
 	if((argc >= 2) && (argv[1].a_type == A_FLOAT)){
 		x->mode = (short)(CLIP(argv[1].a_w.w_float, 0, 2));
 	}
-	
+#endif
+
 	x->d2r = 3.141592653589793238462643383279502884197169399375105820974944592307816406286208998628034825342117068/180.0;
 	x->r2d = 180.0/3.141592653589793238462643383279502884197169399375105820974944592307816406286208998628034825342117068;
 	
@@ -210,6 +241,7 @@ void Flock_free(t_boids *x)
 	free(x->boid);
 }
 
+#if 0
 void Flock_bang(t_boids *x)
 {
 	short	i;
@@ -259,9 +291,9 @@ void Flock_bang(t_boids *x)
 			delta_x = tempNew_x - tempOld_x;
 			delta_y = tempNew_y - tempOld_y;
 			delta_z = tempNew_z - tempOld_z;
-			azi = atan2(delta_y, delta_x) * x->r2d;
-			ele = atan2(delta_y, delta_x) * x->r2d;
-			speed = sqrt(delta_x * delta_x + delta_y * delta_y  + delta_z * delta_z);
+			azi = atan2f(delta_y, delta_x) * x->r2d;
+			ele = atan2f(delta_y, delta_x) * x->r2d;
+			speed = sqrtf(delta_x * delta_x + delta_y * delta_y  + delta_z * delta_z);
 			SETFLOAT(out+0, i);
 			SETFLOAT(out+1, tempNew_x);
 			SETFLOAT(out+2, tempNew_y);
@@ -365,6 +397,7 @@ void Flock_dump(t_boids *x)
 	outlet_anything(x->out2, gensym("number"), 1, outList);
 }
 
+#endif
 
 void Flock_mode(t_boids *x, t_float arg)
 {
@@ -448,6 +481,8 @@ void Flock_prefDist(t_boids *x, t_float arg)
 	x->prefDist = (double)arg;
 }
 
+#if 0
+
 void Flock_flyRect(t_boids *x, t_symbol *msg, short argc, t_atom *argv)
 {
 	double temp[6];
@@ -486,6 +521,27 @@ void Flock_attractPt(t_boids *x, t_symbol *msg, short argc, t_atom *argv)
 		error("boids3d: attractPt needs 3 values");
 	}
 }
+
+#else
+
+void Flock_flyRect(t_boids *x, t_float xlo, t_float ylo, t_float zlo, t_float xhi, t_float yhi, t_float zhi)
+{
+		x->flyRect.left 	= xlo;
+		x->flyRect.top 		= yhi;
+		x->flyRect.right 	= xhi;
+		x->flyRect.bottom 	= ylo;
+		x->flyRect.front 	= zhi;
+		x->flyRect.back 	= zlo;
+}
+
+void Flock_attractPt(t_boids *x, t_float ax, t_float ay, t_float az)
+{
+	x->attractPt.x = ax;
+	x->attractPt.y = ay;
+	x->attractPt.z = az;
+}
+
+#endif
 
 void Flock_reset(t_boids *x)
 {
@@ -526,9 +582,9 @@ void Flock_resetBoids(t_boids *x)
 		x->boid[i].newPos.y = x->boid[i].oldPos.y = RandomInt(x->flyRect.bottom, x->flyRect.top);
 		x->boid[i].newPos.z = x->boid[i].oldPos.z = RandomInt(x->flyRect.back, x->flyRect.front);
 		rndAngle = RandomInt(0, 360) * x->d2r;		// set velocity from random angle
-		x->boid[i].newDir.x = sin(rndAngle);
-		x->boid[i].newDir.y = cos(rndAngle);
-		x->boid[i].newDir.z = (cos(rndAngle) + sin(rndAngle)) * 0.5;
+		x->boid[i].newDir.x = sinf(rndAngle);
+		x->boid[i].newDir.y = cosf(rndAngle);
+		x->boid[i].newDir.z = (cosf(rndAngle) + sinf(rndAngle)) * 0.5;
 		x->boid[i].speed = (kMaxSpeed + kMinSpeed) * 0.5;
 	}
 }
@@ -729,7 +785,7 @@ float MatchAndAvoidNeighbors(t_boids *x, short theBoid, Velocity *matchNeighborV
 		// if distance is less than preferred distance, then neighbor influences boid
 		distSqr = x->boid[theBoid].neighborDistSqr[i];
 		if (distSqr < x->prefDistSqr) {
-			dist = sqrt(distSqr);
+			dist = sqrtf(distSqr);
 
 			distH = x->boid[neighbor].oldPos.x - x->boid[theBoid].oldPos.x;
 			distV = x->boid[neighbor].oldPos.y - x->boid[theBoid].oldPos.y;
@@ -926,7 +982,7 @@ void NormalizeVelocity(Velocity *direction)
 {
 	float	my_hypot;
 	
-	my_hypot = sqrt(direction->x * direction->x + direction->y * direction->y + direction->z * direction->z );
+	my_hypot = sqrtf(direction->x * direction->x + direction->y * direction->y + direction->z * direction->z );
 
 	if (my_hypot != 0.0) {
 		direction->x = direction->x / my_hypot;
@@ -954,3 +1010,6 @@ double DistSqrToPt(Point3d firstPoint, Point3d secondPoint)
 	c = firstPoint.z - secondPoint.z;	
 	return(a * a + b * b + c * c);
 }
+
+#undef double
+#undef t_float
