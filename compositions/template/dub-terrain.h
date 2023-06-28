@@ -2,13 +2,10 @@
 /*
 
 Dub Terrain
-by Claude Heiland-Allen 2023-06-21, 2023-06-27
+by Claude Heiland-Allen 2023-06-21, 2023-06-27, 2023-06-28
 
 Dub delays with waveshaping and filters.
 Phase and magnitude control many things in a non-uniform way.
-
-Note: requires a large block size to avoid underruns.
-Tested and seems working with block size 512.
 
 */
 
@@ -68,7 +65,6 @@ bool COMPOSITION_setup(BelaContext *context, struct COMPOSITION *C)
 static inline
 void COMPOSITION_render(BelaContext *context, struct COMPOSITION *s, float out[2], const float in_audio[2], const float magnitude, const float phase)
 {
-	static const int prime[4] = { 2, 3, 5, 7 };
 	static const sample4 prime2pi = { 2 * float(twopi), 3 * float(twopi), 5 * float(twopi), 7 * float(twopi) };
 	const sample4 one = vmovq_n_f32(1.0f);
 	// smoothing to avoid zipper noise with non-REBUS controllers
