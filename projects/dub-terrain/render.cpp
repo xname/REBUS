@@ -10,18 +10,15 @@ Phase and magnitude control many things in a non-uniform way.
 */
 
 //---------------------------------------------------------------------
-// abstracted composition core
-// this file is included by render.cpp
+// dependencies
+
+#include <libraries/REBUS/REBUS.h>
+#include <libraries/REBUS/dsp_neon.h>
 
 //---------------------------------------------------------------------
 // added to audio recording filename
 
 const char *COMPOSITION_name = "dub-terrain";
-
-//---------------------------------------------------------------------
-// dependencies
-
-#include "_dsp_neon.h"
 
 //---------------------------------------------------------------------
 // composition state
@@ -44,7 +41,7 @@ struct COMPOSITION
 //---------------------------------------------------------------------
 // called during setup
 
-static inline
+inline
 bool COMPOSITION_setup(BelaContext *context, struct COMPOSITION *C)
 {
 	if (context->audioSampleRate != SR)
@@ -62,7 +59,7 @@ bool COMPOSITION_setup(BelaContext *context, struct COMPOSITION *C)
 //---------------------------------------------------------------------
 // called once per audio frame (default 44100Hz sample rate)
 
-static inline
+inline
 void COMPOSITION_render(BelaContext *context, struct COMPOSITION *s, float out[2], const float in_audio[2], const float magnitude, const float phase)
 {
 	static const sample4 prime2pi = { 2 * float(twopi), 3 * float(twopi), 5 * float(twopi), 7 * float(twopi) };
@@ -121,9 +118,13 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *s, float out[2
 //---------------------------------------------------------------------
 // called during cleanup
 
-static inline
+inline
 void COMPOSITION_cleanup(BelaContext *context, struct COMPOSITION *C)
 {
 }
+
+//---------------------------------------------------------------------
+
+REBUS
 
 //---------------------------------------------------------------------

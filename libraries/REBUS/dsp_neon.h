@@ -6,7 +6,7 @@
 
 #include <arm_neon.h>
 #include <math.h>
-#include "_dsp.h"
+#include "dsp.h"
 
 //---------------------------------------------------------------------
 // common defs

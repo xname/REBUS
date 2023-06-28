@@ -15,8 +15,10 @@ A collaboration between the Antennas & Electromagnetics Group and C4DM (Centre f
 
  */
 
+#include <libraries/REBUS/REBUS.h>
+
 // read square wave table
-#include "_square_table.h"
+#include "square_table.h"
 
 const char *COMPOSITION_name = "spectrifier";
 
@@ -249,3 +251,5 @@ void COMPOSITION_cleanup(BelaContext *context, COMPOSITION *C)
 {
 
 }
+
+REBUS

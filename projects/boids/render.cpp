@@ -1,7 +1,7 @@
 //---------------------------------------------------------------------
 /*
 
-untitled example with boids
+example with boids
 by Claude Heiland-Allen 2023-04-21, 2023-06-14, 2023-06-19, 2023-06-28
 
 For each member of the flock:
@@ -13,19 +13,16 @@ Phase controls pitch targer.
 */
 
 //---------------------------------------------------------------------
-// abstracted composition core
-// this file is included by render.cpp
+// dependencies
+
+#include <libraries/REBUS/REBUS.h>
+#include <complex>
+#include "boids3d.h"
 
 //---------------------------------------------------------------------
 // added to audio recording filename
 
 const char *COMPOSITION_name = "boids";
-
-//---------------------------------------------------------------------
-// dependencies
-
-#include <complex>
-#include "_boids3d.h"
 
 //---------------------------------------------------------------------
 // composition state
@@ -45,7 +42,7 @@ struct COMPOSITION
 //---------------------------------------------------------------------
 // called during setup
 
-static inline
+inline
 bool COMPOSITION_setup(BelaContext *context, struct COMPOSITION *C)
 {
 	C->boids = Flock_new(COUNT);
@@ -67,7 +64,7 @@ bool COMPOSITION_setup(BelaContext *context, struct COMPOSITION *C)
 }
 
 //---------------------------------------------------------------------
-static inline
+inline
 void COMPOSITION_boids(BelaContext *context, struct COMPOSITION *C, float magnitude, float phase)
 {
 	Flock_attractPt(C->boids, magnitude, phase, 0.5f);
@@ -77,7 +74,7 @@ void COMPOSITION_boids(BelaContext *context, struct COMPOSITION *C, float magnit
 //---------------------------------------------------------------------
 // called once per audio frame (default 44100Hz sample rate)
 
-static inline
+inline
 void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, float out[2], const float in[2], const float magnitude, const float phase)
 {
 	if (C->n == 0)
@@ -120,10 +117,14 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, float out[2
 //---------------------------------------------------------------------
 // called during cleanup
 
-static inline
+inline
 void COMPOSITION_cleanup(BelaContext *context, struct COMPOSITION *C)
 {
 	Flock_free(C->boids);
 }
+
+//---------------------------------------------------------------------
+
+REBUS
 
 //---------------------------------------------------------------------

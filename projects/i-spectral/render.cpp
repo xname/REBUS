@@ -11,19 +11,16 @@ Magnitude input adjust volume with wave-shaping distortion.
 */
 
 //---------------------------------------------------------------------
-// abstracted composition core
-// this file is included by render.cpp
+// dependencies
+
+#include <libraries/REBUS/REBUS.h>
+#include <libraries/REBUS/dsp.h>
+#include <complex>
 
 //---------------------------------------------------------------------
 // added to audio recording filename
 
-const char *COMPOSITION_name = "i-spectral-that-hand-motion";
-
-//---------------------------------------------------------------------
-// dependencies
-
-#include <complex>
-#include "_dsp.h"
+const char *COMPOSITION_name = "i-spectral";
 
 //---------------------------------------------------------------------
 // composition parameters
@@ -125,7 +122,7 @@ void COMPOSITION_process(void *)
 
 //---------------------------------------------------------------------
 
-static inline
+inline
 bool COMPOSITION_setup(BelaContext *context, COMPOSITION *C)
 {
 	// allocate aligned buffers
@@ -164,7 +161,7 @@ bool COMPOSITION_setup(BelaContext *context, COMPOSITION *C)
 
 //---------------------------------------------------------------------
 
-static inline
+inline
 void COMPOSITION_render(BelaContext *context, COMPOSITION *C, float out[2], const float in[2], const float magnitude, const float phase)
 {
 	// read input
@@ -217,7 +214,7 @@ void COMPOSITION_render(BelaContext *context, COMPOSITION *C, float out[2], cons
 
 //---------------------------------------------------------------------
 
-static inline
+inline
 void COMPOSITION_cleanup(BelaContext *context, COMPOSITION *C)
 {
 	if (C)
@@ -232,5 +229,9 @@ void COMPOSITION_cleanup(BelaContext *context, COMPOSITION *C)
 	}
 	gC = nullptr;
 }
+
+//---------------------------------------------------------------------
+
+REBUS
 
 //---------------------------------------------------------------------

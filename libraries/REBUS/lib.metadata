@@ -1,0 +1,17 @@
+name=REBUS
+version=0.0.1
+author=Eleonora Maria Irene Oreggia, Claude Heiland-Allen
+maintainer=Eleonora Maria Irene Oreggia, Claude Heiland-Allen
+description=REBUS - Electromagnetic Interactions.
+examples=REBUS/composition-api
+license=GPL 3.0
+url=https://xname.cc/rebus
+board=*
+dependencies=Gui ne10 Pipe Scope sndfile
+LDFLAGS=
+LDLIBS=
+CXXFLAGS=
+CC=
+CXX=
+CFLAGS=
+CPPFLAGS=

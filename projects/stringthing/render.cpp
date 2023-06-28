@@ -12,8 +12,9 @@ Tested with block size 256, 60% CPU load.
 */
 
 //---------------------------------------------------------------------
-// abstracted composition core
-// this file is included by render.cpp
+// dependencies
+
+#include <libraries/REBUS/REBUS.h>
 
 //---------------------------------------------------------------------
 // added to audio recording filename
@@ -67,7 +68,7 @@ struct COMPOSITION
 //---------------------------------------------------------------------
 // called during setup
 
-static inline
+inline
 bool COMPOSITION_setup(BelaContext *context, struct COMPOSITION *C)
 {
 	std::memset(C, 0, sizeof(*C));
@@ -80,7 +81,7 @@ bool COMPOSITION_setup(BelaContext *context, struct COMPOSITION *C)
 	return true;
 }
 
-static inline
+inline
 void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, float out[2], const float in[2], const float magnitude, const float phase)
 {
 	if (C->phase == 0)
@@ -189,7 +190,13 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, float out[2
 //---------------------------------------------------------------------
 // called during cleanup
 
-static inline
+inline
 void COMPOSITION_cleanup(BelaContext *context, struct COMPOSITION *C)
 {
 }
+
+//---------------------------------------------------------------------
+
+REBUS
+
+//---------------------------------------------------------------------
