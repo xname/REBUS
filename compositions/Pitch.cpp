@@ -54,13 +54,15 @@ void render(BelaContext *context, void *userData)
 		}
 		counter++;
 
-		
+		float out;
+
+		scope.log(gainReading, phaseReading, out);		
+
 		float out = amplitude * sin(gPhase);
 		gPhase += 2.0 * M_PI * frequency / context->audioSampleRate;
 		if (gPhase >= M_PI)
 			gPhase -= 2.0 * M_PI;
 			
-		scope.log(gainReading, phaseReading, out);
 			
 		for (unsigned int channel = 0; channel < context->audioOutChannels; channel++){
 			audioWrite(context, n, channel, out);
