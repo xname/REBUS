@@ -4,6 +4,7 @@
 
 	boids3d 2005 - 2006 a.sier / jasch 
 	adapted from boids by eric singer © 1995-2003 eric l. singer
+	modified for use in non-Pd host in 2023 by Claude Heiland-Allen
 
 	This program is free software; you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by

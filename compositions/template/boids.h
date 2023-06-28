@@ -2,7 +2,7 @@
 /*
 
 untitled example with boids
-by Claude Heiland-Allen 2023-04-21, 2023-06-14, 2023-06-19
+by Claude Heiland-Allen 2023-04-21, 2023-06-14, 2023-06-19, 2023-06-28
 
 For each member of the flock:
 a complex oscillator is retriggered
