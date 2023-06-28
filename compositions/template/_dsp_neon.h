@@ -77,7 +77,7 @@ sample4 mtof4(const sample4 &f)
 //---------------------------------------------------------------------
 // based on pd's [vcf~] [lop~] [hip~]
 
-typedef struct { sample4 re, im; } VCF4;
+typedef struct { float re[4], im[4]; } VCF4;
 
 static inline
 sample4 vcf4(VCF4 *s, const sample4 &x, const sample4 &hz, const sample &q)
@@ -95,12 +95,12 @@ sample4 vcf4(VCF4 *s, const sample4 &x, const sample4 &hz, const sample &q)
 	sincos4(cim, cre, cf);
 	cre = vmulq_f32(cre, r);
 	cim = vmulq_f32(cim, r);
-	sample4 re2 = s->re;
-	sample4 im2 = s->im;
+	sample4 re2 = vld1q_f32(s->re);
+	sample4 im2 = vld1q_f32(s->im);
 	sample4 re = vaddq_f32(vmulq_n_f32(vmulq_f32(oneminusr, x), ampcorrect), vsubq_f32(vmulq_f32(cre, re2), vmulq_f32(cim, im2)));
 	sample4 im = vaddq_f32(vmulq_f32(cim, re2), vmulq_f32(cre, im2));
-	s->re = re;
-	s->im = im;
+	vst1q_f32(s->re, re);
+	vst1q_f32(s->im, im);
 	return re;
 }
 
