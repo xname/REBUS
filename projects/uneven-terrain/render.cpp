@@ -46,6 +46,9 @@ struct COMPOSITION
 
 	// high-pass (DC-blocking) filters for comb filter
 	HIP fb[2];
+
+	// high-pass (DC-blocking) filters for audio output
+	HIP dc[2];
 };
 
 //---------------------------------------------------------------------
@@ -167,11 +170,11 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *s,
 		, si * fb0[0] + co * fb0[1]
 		};
 
-	// waveshaping / mixing
+	// waveshaping / mixing with DC blocking high-pass filters
 	// the outside numbers (overall levels) are the same in both channels
 	// the inside numbers (modulation coeffcients) are different
 	// this gives stereo effects
-	out[0] = sinf
+	out[0] = hip(&s->dc[0], 0.5f * sinf
 	(	( 3 * sinf(7 * float(twopi) * p) * kick
 		+ 2 * sinf( 5 * sinf(3 * float(twopi) * p) * bass
 		          + float(pi) * sinf(3 * float(twopi) * m))
@@ -179,8 +182,8 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *s,
 		+ 3 * sinf(6 * float(twopi) * m) * fb[0]
 		+ snares[0] + hats[0]
 		) * 0.5f
-	);
-	out[1] = sinf
+	), 1);
+	out[1] = hip(&s->dc[1], 0.5f * sinf
 	(	( 3 * sinf(5 * float(twopi) * p) * kick
 		+ 2 * sinf( 5 * sinf(4 * float(twopi) * p) * bass
 		          + float(pi) * sinf(4 * float(twopi) * m))
@@ -188,7 +191,7 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *s,
 		+ 3 * sinf(8 * float(twopi) * m) * fb[1]
 		+ snares[1] + hats[1]
 		) * 0.5f
-	);
+	), 1);
 
 	// write to the delay lines for the comb filter
 	delwrite(&s->del0, out[0] + snares[0]);
