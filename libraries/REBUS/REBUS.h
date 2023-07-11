@@ -34,9 +34,19 @@ converted to library 2023-06-28
 
 //---------------------------------------------------------------------
 // set recording preference, can be overriden via compilation flags
+// #define RECORD 1 before including to enable recording.
+// #define RECORD 0 before including to keep recording disabled
+// and hide explanatory startup messages.
+// default to no recording, to avoid accidentally filling the storage.
 
-#ifndef RECORD
-#define RECORD 1
+#ifdef RECORD
+// RECORD was defined externally, hide messages
+#define RECORD_DEFINED 1
+#else
+// RECORD was not defined externally, print documentation messages
+#define RECORD_DEFINED 0
+// default to no recording
+#define RECORD 0
 #endif
 
 //---------------------------------------------------------------------
@@ -57,6 +67,8 @@ converted to library 2023-06-28
 #include <cstdlib>
 #include <cstring>
 #include <time.h>
+
+// for the nothrow version of new (memory allocation and construction)
 #include <new>
 
 //---------------------------------------------------------------------
@@ -72,19 +84,31 @@ void COMPOSITION_cleanup(BelaContext *context, struct COMPOSITION *C);
 
 #define SCOPE 1
 #define GUI (MODE == MODE_BELA)
-#ifndef RECORD
-#define RECORD 1
-#endif
 
 //---------------------------------------------------------------------
 
 #if RECORD
-// must be >= block size * channels
+
+// Record all the channels into a single multichannel file.
+// Channel order:
+// - audio output left
+// - audio output right
+// - audio input left
+// - audio input right
+// - magnitude/gain (from analog IO pin)
+// - phase (from analog IO pin)
 #define RECORD_CHANNELS 6
+
+// RECORD_SIZE must be >= block size * channels
 #define RECORD_SIZE (1024 * RECORD_CHANNELS)
+
+// forward declare the non-realtime record task callback
 template <typename COMPOSITION_T>
 void REBUS_record(void *);
+
 #endif
+
+//---------------------------------------------------------------------
 
 // state
 
@@ -96,16 +120,37 @@ struct STATE
 	COMPOSITION_T composition;
 //---------------------------------------------------------------------
 
+
+//---------------------------------------------------------------------
 #if RECORD
-	// recording
+
+	// recording state
+
+	// this interleaved buffer is written by
+	// the realtime audio thread
+	// during the render callback
 	float record_out[RECORD_SIZE];
+
+	// this interleaved buffer is written by
+	// the non-realtime sound file writer task
+	// during the task callback
 	float record_in[RECORD_SIZE];
-	unsigned int record_ix;
+
+	// the non-realtime sound file writer task
 	AuxiliaryTask record_task;
+
+	// communication from realtime audio to non-realtime sound file writer
 	Pipe pipe;
+
+	// output sound file handle
 	SNDFILE *out_file;
+
+	// the number of items stored in the record_out buffer
+	// during each run of the realtime audio render callback
 	unsigned int items;
+
 #endif
+//---------------------------------------------------------------------
 
 };
 
@@ -143,39 +188,77 @@ bool REBUS_setup(BelaContext *context, void *userData)
 	}
 	STATE_ptr = S;
 
+//---------------------------------------------------------------------
 #if RECORD
-	// recording
+
+	// output audio file parameters
 	SF_INFO info = {0};
 	info.channels = RECORD_CHANNELS;
 	info.samplerate = context->audioSampleRate;
 	info.format = SF_FORMAT_WAV | SF_FORMAT_FLOAT;
+
+	// create a filename based on the current date and time
+	// with the composition name appended
 	char record_path[1000];
 	time_t seconds_since_epoch = time(0);
 	struct tm *t = localtime(&seconds_since_epoch);
 	if (t)
 	{
+		// human-readable datetime format
 		snprintf(record_path, sizeof(record_path), "%04d-%02d-%02d-%02d-%02d-%02d-%s.wav", 1900 + t->tm_year, t->tm_mon + 1, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec, COMPOSITION_name);
 	}
 	else
 	{
+		// cryptically-named fallback in case the localtime() function fails
 		snprintf(record_path, sizeof(record_path), "%08x-%s.wav", (unsigned int) seconds_since_epoch, COMPOSITION_name);
 	}
+
+	// open the output sound file
 	if (! (S->out_file = sf_open(record_path, SFM_WRITE, &info)))
 	{
-		return false;
+		rt_printf("Could not open '%s' for recording.\n", record_path);
+		return false; // FIXME should this be a hard failure?
 	}
+
+	// create the pipe to communicate the record
+	// from realtime audio to non-realtime writer
 	S->pipe.setup("record-pipe", 65536, false, false);
+
+	// create the non-realtime sound file writer task
 	if (! (S->record_task = Bela_createAuxiliaryTask(&REBUS_record<COMPOSITION_T>, 90, "record")))
 	{
-		return false;
+		rt_printf("Could not create recorder task.\n");
+		return false; // FIXME should this be a hard failure?
 	}
 	S->items = context->audioFrames * info.channels;
 #endif
+//---------------------------------------------------------------------
 
 //---------------------------------------------------------------------
 // composition render
-	return COMPOSITION_setup(context, &S->composition);
+	bool ok = COMPOSITION_setup(context, &S->composition);
 //---------------------------------------------------------------------
+
+	if (ok)
+	{
+
+		// print messages about the state of recording
+		// if RECORD is externally defined to 0,
+		// nothing is printed and recording is disabled
+#if RECORD
+		rt_printf("Recording to '%s'\n", record_path);
+#else
+#if ! RECORD_DEFINED
+		rt_printf(
+			"Not recording.\n"
+			"'#define RECORD 1' before including the REBUS library to enable recording.\n"
+			"'#define RECORD 0' before including the REBUS library to hide these messages.\n"
+		);
+#endif
+#endif
+
+	}
+	return ok;
 }
 
 //---------------------------------------------------------------------
@@ -226,8 +309,9 @@ void REBUS_render(BelaContext *context, void *userData)
 #if SCOPE
 		scope.log(out[0], out[1], in[0], in[1], magnitude, phase);
 #endif
+
 #if RECORD
-		// interleaved
+		// write data to interleaved buffer
 		S->record_out[RECORD_CHANNELS * n + 0] = out[0];
 		S->record_out[RECORD_CHANNELS * n + 1] = out[1];
 		S->record_out[RECORD_CHANNELS * n + 2] = in[0];
@@ -235,15 +319,17 @@ void REBUS_render(BelaContext *context, void *userData)
 		S->record_out[RECORD_CHANNELS * n + 4] = magnitude;
 		S->record_out[RECORD_CHANNELS * n + 5] = phase;
 #endif
+
 		audioWrite(context, n, 0, out[0]);
 		audioWrite(context, n, 1, out[1]);
 	}
 
 #if RECORD
-	// record
+	// send data to non-realtime audio file writer
 	S->pipe.writeRt(&S->record_out[0], S->items);
 	Bela_scheduleAuxiliaryTask(S->record_task);
 #endif
+
 }
 
 //---------------------------------------------------------------------
@@ -253,10 +339,13 @@ void REBUS_render(BelaContext *context, void *userData)
 template <typename COMPOSITION_T>
 void REBUS_record(void *)
 {
+	// cast to a pointer to the actual type of the structure in memory
 	STATE<COMPOSITION_T> *S = (STATE<COMPOSITION_T> *) STATE_ptr;
 	int ret;
+	// receive interleaved data from the realtime audio thread...
 	while (S->items && (ret = S->pipe.readNonRt(&S->record_in[0], S->items)) > 0 && S->out_file)
 	{
+		// ...and write it to the recording sound file
 		sf_write_float(S->out_file, &S->record_in[0], ret);
 	}
 }
@@ -273,7 +362,7 @@ void REBUS_cleanup(BelaContext *context, void *userData)
 	{
 
 #if RECORD
-		// stop recording
+		// finish the recording
 		if (S->out_file)
 		{
 			sf_write_sync(S->out_file);
