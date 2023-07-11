@@ -395,27 +395,39 @@ bool REBUS_setup(BelaContext *context, void *userData)
 
 		// print messages about the state of recording
 #if RECORD
-		rt_printf("Recording to '%s'.\n", record_path);
-#else
-		rt_printf("Recording disabled.\n");
-#endif
-#if ! RECORD_DEFINED
 		rt_printf(
-			"'#define RECORD 1' before including the REBUS library to enable recording.\n"
-			"'#define RECORD 0' before including the REBUS library to hide these messages.\n"
+			"Recording to '%s'."
+#if ! RECORD_DEFINED
+			"  '#define RECORD 0' before including REBUS to disable recording."
+#endif
+			"\n"
+		, record_path);
+#else
+		rt_printf(
+			"Recording disabled."
+#if ! RECORD_DEFINED
+			"  '#define RECORD 1' before including REBUS to enable recording."
+#endif
+			"\n"
 		);
 #endif
 
 		// print messages about the state of oscilloscope
 #if SCOPE
-		rt_printf("Oscilloscope enabled.\n");
-#else
-		rt_printf("Oscilloscope disabled.\n");
-#endif
-#if ! SCOPE_DEFINED
 		rt_printf(
-			"'#define SCOPE 0' before including the REBUS library to disable oscilloscope.\n"
-			"'#define SCOPE 1' before including the REBUS library to hide these messages.\n"
+			"Oscilloscope enabled."
+#if ! SCOPE_DEFINED
+			"  '#define SCOPE 0' before including REBUS to disable oscilloscope."
+#endif
+			"\n"
+		);
+#else
+		rt_printf(
+			"Oscilloscope disabled.\n"
+#if ! SCOPE_DEFINED
+			"  '#define SCOPE 1' before including REBUS to enable oscilloscope.\n"
+#endif
+			"\n"
 		);
 #endif
 
