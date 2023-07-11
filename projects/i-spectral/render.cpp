@@ -50,11 +50,11 @@ struct COMPOSITION
 {
 	// phase motion gets stored here
 	float *input; //[BUFFER];
-	// audio output gets accumulated here
-	float *output; //[BUFFER];
-	// two buffers of FFT of phase motion for input
-	ne10_fft_cpx_float32_t *motion[2]; //[BLOCK];
-	// one buffer of FFT for output
+	// audio outputs get accumulated here (stereo)
+	float *output[2]; //[BUFFER];
+	// FFT of phase motion for input
+	ne10_fft_cpx_float32_t *motion; //[BLOCK];
+	// FFT of spectrum for output
 	ne10_fft_cpx_float32_t *synth; //[BLOCK];
 	// real time domain of (I)FFT operations
 	float *block; //[BLOCK];
@@ -73,14 +73,12 @@ struct COMPOSITION
 	// copies of the ring buffer indices for use by the FFT process
 	unsigned int fft_output_ix_w;
 	unsigned int fft_input_ix;
-	// which of the two motion buffers is current
-	unsigned int fft_motion_ix;
 	// background task for FFT
 	AuxiliaryTask process_task;
 	// flag to detect too-slow computation
 	volatile bool inprocess;
-	// audio output DC blocking filter state
-	float dc;
+	// audio output DC blocking filter state (stereo)
+	float dc[2];
 	// phase input bandpasss filter
 	LOP phase_lop;
 	HIP phase_hip;
@@ -112,58 +110,43 @@ void COMPOSITION_process(void *)
 	}
 
 	// fft
-	ne10_fft_r2c_1d_float32_neon(C->motion[C->fft_motion_ix], C->block, C->fft_config);
+	ne10_fft_r2c_1d_float32_neon(C->motion, C->block, C->fft_config);
 
-	// sound synthesizer
-	for (unsigned int n = 0; n < BLOCK; ++n) // TODO exploit real FFT symmetry
+	// stereo sound synthesizer
+	for (unsigned int channel = 0; channel < 2; ++channel)
 	{
-		std::complex<float> next(C->motion[C->fft_motion_ix][n].r, C->motion[C->fft_motion_ix][n].i);
-		float gain = std::abs(next);
-
-#if 0
-
-		// phase vocoder phase advance
-		// has strange uncontrolled low frequency chirp artifacts
-		std::complex<float> now(C->motion[! C->fft_motion_ix][n].r, C->motion[! C->fft_motion_ix][n].i);
-		std::complex<float> then(C->synth[n].r, C->synth[n].i);
-		std::complex<float> advance = next / now;
-		float a = std::abs(advance);
-		if (a == 0) advance = 1; else advance /= a;
-		float t = std::abs(then);
-		if (t == 0) then = 1; else then /= t;
-		// not sure if it should be advance**log2(HOP) (easy) or advance**(1/log2(HOP)) (hard)...
-		for (unsigned int k = 1; k < HOP; k <<= 1)
+		for (unsigned int n = 0; n < BLOCK; ++n)
 		{
-			advance *= advance;
+			// exploit symmetry of FFT of real-valued signal
+			if (n > BLOCK / 2)
+			{
+				C->synth[n].r = C->synth[BLOCK - n].r;
+				C->synth[n].i = -C->synth[BLOCK - n].i;
+			}
+			else
+			{
+				std::complex<float> spectrum(C->motion[n].r, C->motion[n].i);
+				// paulstretch-style phase randomisation
+				// a bit spacier than a phase vocoder but no unpleasant artifacts
+				// and much easier to implement
+				float p = 2.0f * 3.141592653f * rand() / (float) RAND_MAX;
+				spectrum *= std::complex<float>(std::cos(p), std::sin(p));
+				C->synth[n].r = spectrum.real();
+				C->synth[n].i = spectrum.imag();
+			}
 		}
-		then = then * gain * advance;
 
-#else
+		// ifft
+		ne10_fft_c2r_1d_float32_neon(C->block, C->synth, C->fft_config);
 
-		// paulstretch-style phase randomisation
-		// a bit spacier but no unpleasant artifacts
-		float p = 2.0f * 3.141592653 * rand() / (float) RAND_MAX;
-		std::complex<float> then = gain * std::complex<float>(std::cos(p), std::sin(p));
-
-#endif
-
-		C->synth[n].r = then.real();
-		C->synth[n].i = then.imag();
-	}
-
-	// swap buffer index
-	C->fft_motion_ix = ! C->fft_motion_ix;
-
-	// ifft
-	ne10_fft_c2r_1d_float32_neon(C->block, C->synth, C->fft_config);
-
-	// windowed overlap add into output buffer
-	unsigned int output_ptr = C->fft_output_ix_w % BUFFER;
-	for (unsigned int n = 0; n < BLOCK; ++n)
-	{
-		C->output[output_ptr] += C->block[n] * C->window[n];
-		++output_ptr;
-		output_ptr %= BUFFER;
+		// windowed overlap add into output buffer
+		unsigned int output_ptr = C->fft_output_ix_w % BUFFER;
+		for (unsigned int n = 0; n < BLOCK; ++n)
+		{
+			C->output[channel][output_ptr] += C->block[n] * C->window[n];
+			++output_ptr;
+			output_ptr %= BUFFER;
+		}
 	}
 
 	// we're done
@@ -187,9 +170,9 @@ bool COMPOSITION_setup(BelaContext *context, COMPOSITION *C)
 	std::memset(ptr, 0, sizeof(*ptr) * count);
 
 	NEW(C->input, float, BUFFER)
-	NEW(C->output, float, BUFFER)
-	NEW(C->motion[0], ne10_fft_cpx_float32_t, BLOCK)
-	NEW(C->motion[1], ne10_fft_cpx_float32_t, BLOCK)
+	NEW(C->output[0], float, BUFFER)
+	NEW(C->output[1], float, BUFFER)
+	NEW(C->motion, ne10_fft_cpx_float32_t, BLOCK)
 	NEW(C->synth, ne10_fft_cpx_float32_t, BLOCK)
 	NEW(C->block, float, BLOCK)
 	NEW(C->window, float, BLOCK)
@@ -242,20 +225,22 @@ void COMPOSITION_render(BelaContext *context, COMPOSITION *C,
 	}
 	// amplify
 	float gain = magnitude;
-	gain *= gain;
-	float o = GAIN * gain * C->output[C->output_ix_r];
+	gain *= gain * GAIN;
+	for (unsigned int channel = 0; channel < 2; ++channel)
+	{
+		float o = gain * C->output[channel][C->output_ix_r];
 
-	// simple dc-blocking high pass filter
-	C->dc *= 0.999f;
-	C->dc += 0.001f * o;
-	o -= C->dc;
+		// simple dc-blocking high pass filter
+		C->dc[channel] *= 0.999f;
+		C->dc[channel] += 0.001f * o;
+		o -= C->dc[channel];
 
-	// write output with waveshaping
-	out[0] = std::tanh(o);
-	out[1] = std::sin(o);
+		// write output with waveshaping
+		out[channel] = std::tanh(o);
 
-	// reset for next overlap add
-	C->output[(C->output_ix_r + BUFFER / 2) % BUFFER] = 0;
+		// reset for next overlap add
+		C->output[channel][(C->output_ix_r + BUFFER / 2) % BUFFER] = 0;
+	}
 
 	// advance
 	++C->output_ix_r;
@@ -290,9 +275,9 @@ void COMPOSITION_cleanup(BelaContext *context, COMPOSITION *C)
 	{
 		// free buffers
 		NE10_FREE(C->input);
-		NE10_FREE(C->output);
-		NE10_FREE(C->motion[0]);
-		NE10_FREE(C->motion[1]);
+		NE10_FREE(C->output[0]);
+		NE10_FREE(C->output[1]);
+		NE10_FREE(C->motion);
 		NE10_FREE(C->synth);
 		NE10_FREE(C->block);
 		NE10_FREE(C->window);
