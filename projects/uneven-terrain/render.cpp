@@ -2,7 +2,7 @@
 /*
 
 Uneven Terrain
-by Claude Heiland-Allen 2023-06-19, 2023-06-28
+by Claude Heiland-Allen 2023-06-19, 2023-06-28, 2023-07-11
 
 Techno with waveshaping and filters.
 Phase and magnitude control many things in a non-uniform way.
@@ -25,13 +25,26 @@ const char *COMPOSITION_name = "uneven-terrain";
 
 struct COMPOSITION
 {
+	// ramps from 0 to 1 every two beats
 	PHASOR clock;
+
+	// resonant filters for pitched bass
 	BIQUAD bq[2];
+
+	// delay lines (with buffers) for stereo comb filter
 	DELAY del0; float del0buf[65536];
 	DELAY del1; float del1buf[65536];
+
+	// low-pass filters for smoothing control signals
 	LOP lo[2];
+
+	// sample-and-hold filters for making pitched noise for snare
 	SAMPHOLD snare[2];
+
+	// high-pass filters for hi-hat
 	HIP hat[2];
+
+	// high-pass (DC-blocking) filters for comb filter
 	HIP fb[2];
 };
 
@@ -41,93 +54,143 @@ struct COMPOSITION
 inline
 bool COMPOSITION_setup(BelaContext *context, struct COMPOSITION *C)
 {
+	// check that the actual float rate matches the dsp.h float rate
 	if (context->audioSampleRate != SR)
 	{
-		rt_printf("warning: using %f, expected %f\n", (double) context->audioSampleRate, (double) SR);
+		rt_printf("Sample rate mismatch: using %f, expected %f\n", (double) context->audioSampleRate, (double) SR);
+		// return false; // it'll sound at a different pitch and speed, should this be a hard failure?
 	}
+
+	// clear everything to 0
 	std::memset(C, 0, sizeof(*C));
+
+	// resonant high pass filter (32 Hz, Q 12) for bass
 	highpass(&C->bq[0], 32, 12);
+
+	// resonant low pass filter (48 Hz, Q 100) for sub
 	lowpass(&C->bq[1], 48, 100);
+
+	// set the length of the delay lines
+	// should match the size of the arrays
+	// immediately following in the data structure
 	C->del0.length = 65536;
 	C->del1.length = 65536;
+
 	return true;
 }
 
 //---------------------------------------------------------------------
-// called once per audio frame (default 44100Hz sample rate)
+// called once per audio frame (default 44100Hz float rate)
 
 inline
-void COMPOSITION_render(BelaContext *context, struct COMPOSITION *s, float out[2], const float in_audio[2], const float magnitude, const float phase)
+void COMPOSITION_render(BelaContext *context, struct COMPOSITION *s,
+  float out[2], const float in[2], const float magnitude, const float phase)
 {
-	using std::sin;
-	using std::cos;
-	using std::pow;
 	// smoothing to avoid zipper noise with non-REBUS controllers
 	// reduces EMI noise (?) with REBUS controller
-	float in[2] = { magnitude, phase };
-	in[0] = lop(&s->lo[0], in[0], 10);
-	in[1] = lop(&s->lo[1], in[1], 10);
-	// drum sounds
-	sample clock = phasor(&s->clock, 2.222 / 2);
-	sample hat = 1 - wrap(8 * clock);
+	float m = lop(&s->lo[0], magnitude, 10);
+	float p = lop(&s->lo[1], phase, 10);
+
+	// clock for drum sounds
+	// phasor repeats every two beats at about 133bpm
+	float clock = phasor(&s->clock, 2.222 / 2);
+
+	// make hi-hat envelope at 4 notes per beat
+	// the repeated multiplies are more efficient than powf(hat, 16)
+	float hat = 1 - wrap(8 * clock);
 	hat *= hat;
 	hat *= hat;
 	hat *= hat;
 	hat *= hat;
-	hat *= clamp(sinf(7 * float(twopi) * in[0]), 0, 1);
-	sample hats[2] =
+	// modulate hi-hat amplitude by magnitude
+	hat *= clamp(sinf(7 * float(twopi) * m), 0, 1);
+	// make hi-hats as high-pass filtered noise in stereo
+	float hats[2] =
 		{ hip(&s->hat[0], noise() * hat, 4000)
 		, hip(&s->hat[1], noise() * hat, 4000)
 		};
-	sample snare = 1 - wrap(clock - 0.5);
+
+	// make snare envelope every 2 beats (on the off-beat)
+	// the repeated multiplies are more efficient than powf(snare, 32)
+	float snare = 1 - wrap(clock - 0.5);
 	snare *= snare;
 	snare *= snare;
 	snare *= snare;
 	snare *= snare;
 	snare *= snare;
+	// increase gain of attack
 	snare *= snare + 1;
-	snare *= clamp(sinf(6 * float(twopi) * in[0]), 0, 1);
-	sample snhz = mix(1000, 2000, 0.5 * (1.0 - cosf(6 * float(twopi) * in[0])));
-	sample snares[2] =
-		{ samphold(&s->snare[0], noise(), wrap(snhz * clock - 0.25)) * snare
-		, samphold(&s->snare[1], noise(), wrap(snhz * clock + 0.25)) * snare
+	// modulate snare amplitude by magnitude
+	snare *= clamp(sinf(6 * float(twopi) * m), 0, 1);
+    // make snares as sample-and-hold filtered noise in stereo
+    // modulate sample-and-hold frequency by magnitude
+	float snare_pitch = mix(1000, 2000, 0.5 * (1.0 - cosf(6 * float(twopi) * m)));
+	float snares[2] =
+		{ samphold(&s->snare[0], noise(), wrap(snare_pitch * clock - 0.25)) * snare
+		, samphold(&s->snare[1], noise(), wrap(snare_pitch * clock + 0.25)) * snare
 		};
-	sample kick = 1 - wrap(2 * clock);
+
+	// make kick envelope every beat
+	float kick = 1 - wrap(2 * clock);
+	// the repeated multiplies are more efficient than powf(kick, 32)
 	kick *= kick;
 	kick *= kick;
 	kick *= kick;
 	kick *= kick;
 	kick *= kick;
+	// turn into a sine wave with decaying frequency (chirp)
 	kick = sinf(16 * float(pi) * kick);
-	sample bass = kick - biquad(&s->bq[0], kick);
-	sample sub = biquad(&s->bq[1], kick);
-	sample fbhz = mix(64, 512, 0.5f * (1 - cosf(5 * float(twopi) * (in[0] + in[1]))));
-	sample fb0[2] =
-	{ delread1(&s->del0, 1000 / fbhz)
-	, delread1(&s->del1, 1000 / fbhz)
-	};
+
+	// bass is kick minus a resonant high pass filter of kick
+	float bass = kick - biquad(&s->bq[0], kick);
+
+	// sub is resonant low pass filter of kick
+	float sub = biquad(&s->bq[1], kick);
+
+	// comb filter
+	// frequency of filter is modulated by both magnitude and phase
+	float fbhz = mix(64, 512, 0.5f * (1 - cosf(5 * float(twopi) * (m + p))));
+	// read from delay lines
+	float fb0[2] =
+		{ delread1(&s->del0, 1000 / fbhz)
+		, delread1(&s->del1, 1000 / fbhz)
+		};
+	// high pass filter to avoid DC offset
 	fb0[0] = hip(&s->fb[0], fb0[0], 100);
 	fb0[1] = hip(&s->fb[1], fb0[1], 100);
-	sample co = cosf(float(twopi) * in[1]);
-	sample si = sinf(float(twopi) * in[1]);
-	sample fb[2] = { co * fb0[0] - si * fb0[1], si * fb0[0] + co * fb0[1] };
+	// rotate in the stereo field modulated by phase
+	// this is like a matrix-vector multiplication
+	float co = cosf(float(twopi) * p);
+	float si = sinf(float(twopi) * p);
+	float fb[2] =
+		{ co * fb0[0] - si * fb0[1]
+		, si * fb0[0] + co * fb0[1]
+		};
+
 	// waveshaping / mixing
+	// the outside numbers (overall levels) are the same in both channels
+	// the inside numbers (modulation coeffcients) are different
+	// this gives stereo effects
 	out[0] = sinf
-	(	( 3 * sinf(7 * float(twopi) * in[1]) * kick
-		+ 2 * sinf(5 * sinf(3 * float(twopi) * in[1]) * bass + float(pi) * sinf(3 * float(twopi) * in[0]))
-		+ 4 * sinf(5 * float(twopi) * in[0]) * sub
-		+ 3 * sinf(6 * float(twopi) * in[0]) * fb[0]
+	(	( 3 * sinf(7 * float(twopi) * p) * kick
+		+ 2 * sinf( 5 * sinf(3 * float(twopi) * p) * bass
+		          + float(pi) * sinf(3 * float(twopi) * m))
+		+ 4 * sinf(5 * float(twopi) * m) * sub
+		+ 3 * sinf(6 * float(twopi) * m) * fb[0]
 		+ snares[0] + hats[0]
 		) * 0.5f
 	);
-	out[1] = sin
-	(	( 3 * sinf(5 * float(twopi) * in[1]) * kick
-		+ 2 * sinf(5 * sinf(4 * float(twopi) * in[1]) * bass + float(pi) * sinf(4 * float(twopi) * in[0]))
-		+ 4 * sinf(7 * float(twopi) * in[0]) * sub
-		+ 3 * sinf(8 * float(twopi) * in[0]) * fb[1]
+	out[1] = sinf
+	(	( 3 * sinf(5 * float(twopi) * p) * kick
+		+ 2 * sinf( 5 * sinf(4 * float(twopi) * p) * bass
+		          + float(pi) * sinf(4 * float(twopi) * m))
+		+ 4 * sinf(7 * float(twopi) * m) * sub
+		+ 3 * sinf(8 * float(twopi) * m) * fb[1]
 		+ snares[1] + hats[1]
 		) * 0.5f
 	);
+
+	// write to the delay lines for the comb filter
 	delwrite(&s->del0, out[0] + snares[0]);
 	delwrite(&s->del1, out[1] + snares[1]);
 }
@@ -138,6 +201,7 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *s, float out[2
 inline
 void COMPOSITION_cleanup(BelaContext *context, struct COMPOSITION *C)
 {
+	// nothing to do for this composition
 }
 
 //---------------------------------------------------------------------
