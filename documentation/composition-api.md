@@ -16,7 +16,7 @@ default mode, configured by
 #define MODE MODE_REBUS
 ```
 
-### bela with gui (mouse cursor)
+### bela with wires (pseudo-antennas)
 
 change
 
@@ -27,32 +27,24 @@ change
 to
 
 ```
-#define MODE MODE_BELA
+#define MODE MODE_PINS
 ```
 
 or add `CPPFLAGS=-DMODE=1` to bela make options
-
-important notes:
-
-- mouse cursor control is very low resolution in both time and space
-
-- character of movement is completely different
-
-- provided for development purposes only
-
-### desktop with JACK (audio in port)
-
-dive into git history to find this
-
-### desktop with SNDFILE (audio file input)
-
-dive into git history to find this
 
 ## scope
 
 audio out x2, audio in x2, magnitude, phase
 
 ## audio recording
+
+to enable:
+
+```
+#define RECORD 1
+```
+
+before including the REBUS library.
 
 64MB/min (1GB/15mins) 6ch wav:
 
@@ -96,13 +88,15 @@ so that they call the composition functions)
 
 run `make -C libraries install` to copy to bela.local
 
-warning: there is no undo; make a backup first if desired
+warning: there is no undo; make a backup first if desired:
+`/root/Bela/libraries/REBUS` will be deleted and recreated
 
 ## examples
 
 run `make -C examples install` to copy to bela.local
 
-warning: there is no undo; make a backup first if desired
+warning: there is no undo; make a backup first if desired:
+`/root/Bela/examples/REBUS` will be deleted and recreated
 
 ### composition-api
 

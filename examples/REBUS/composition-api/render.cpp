@@ -15,21 +15,67 @@ Phase controls pitch.
 
 For use on REBUS, nothing needs changing.
 
-For use on Bela with GUI (for development/testing purposes):
+For use on Bela with floating wires in analog inputs
+(for development/testing purposes):
 Settings->Make Parameters: CPPFLAGS="-DMODE=1"
 
 */
 
 //---------------------------------------------------------------------
-// The REBUS composition API abstracts some of the repetitive code
-// that would otherwise be duplicated across compositions.
 
-// recordings take 64MB/min, 1GB/15mins
+// recordings of output, input and control signals
+// takes 64MB/min, 1GB/15mins
+
 // uncomment the next line to enable recording
 // #define RECORD 1
 
 // uncomment the next line to disable recording and hide messages
 // #define RECORD 0
+
+//---------------------------------------------------------------------
+
+// oscilloscope shows the output, input and control signals
+
+// uncomment the next line to disable oscilloscope
+// #define SCOPE 0
+
+// uncomment the next line to enable oscilloscope and hide messages
+// #define SCOPE 1
+
+//---------------------------------------------------------------------
+
+// a notch filter can be applied to control signals to remove mains hum
+// not useful with REBUS mode (default disabled)
+// often useful with floating wires in PINS mode (default enabled)
+
+// uncomment the next line to enable the notch filter for REBUS mode
+// #define CONTROL_NOTCH 1
+
+// uncomment the next line to disable the notch filter for PINS mode
+// #define CONTROL_NOTCH 0
+
+// uncomment and vary the next line to change the notch filter frequency
+// #define MAINS_HUM_FREQUENCY 50
+
+// uncomment and vary the next line to change notch filter Q factor
+// #define MAINS_HUM_QFACTOR 3
+
+//---------------------------------------------------------------------
+
+// a low pass filter can be applied to control signals to remove noise
+// sometimes useful with REBUS mode (default disabled)
+// often useful with PINS mode (default enabled)
+
+// uncomment the next line to enable the low pass filter for REBUS mode
+// #define CONTROL_LOP 1
+
+// uncomment the next line to disable the low pass filter for PINS mode
+// #define CONTROL_LOP 0
+
+//---------------------------------------------------------------------
+
+// The REBUS composition API abstracts some of the repetitive code
+// that would otherwise be duplicated across compositions.
 
 #include <libraries/REBUS/REBUS.h>
 
@@ -40,6 +86,7 @@ Settings->Make Parameters: CPPFLAGS="-DMODE=1"
 
 //---------------------------------------------------------------------
 // composition name
+// printed on startup during setup
 // added to audio recording filename if recording is enabled
 
 const char *COMPOSITION_name = "composition-api";

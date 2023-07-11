@@ -10,8 +10,6 @@ composition template library
 by Claude Heiland-Allen 2023-06-14
 based on workshop template by xname 2023
 audio recorder based on an example found on Bela forums
-GUI mouse input based on an example found in Bela SDK
-MODE_SNDFILE added 2023-06-27
 converted to library 2023-06-28
 
 */
@@ -22,8 +20,8 @@ converted to library 2023-06-28
 // BELA on REBUS hardware using control via antenna
 #define MODE_REBUS 0
 
-// BELA on regular board using control via mouse cursor in GUI window
-#define MODE_BELA 1
+// BELA on regular board using control via wires in pins
+#define MODE_PINS 1
 
 //---------------------------------------------------------------------
 // set mode here, can be overriden via compilation flags
@@ -50,26 +48,137 @@ converted to library 2023-06-28
 #endif
 
 //---------------------------------------------------------------------
+// set oscilloscope preference, can be overriden via compilation flags
+// #define SCOPE 1 before including to enable oscilloscope
+// and hide explanatory startup messages.
+// #define SCOPE 0 before including to disable oscilloscope.
+// default to enabled oscilloscope, because it is useful
 
-#if MODE != MODE_REBUS && MODE != MODE_BELA
+#ifdef SCOPE
+// SCOPE was defined externally, hide messages
+#define SCOPE_DEFINED 1
+#else
+// SCOPE was not defined externally, print documentation messages
+#define SCOPE_DEFINED 0
+// default to enabled oscilloscope
+#define SCOPE 1
+#endif
+
+//---------------------------------------------------------------------
+
+#if MODE != MODE_REBUS && MODE != MODE_PINS
 #error REBUS: unsupported MODE
 #endif
 
 //---------------------------------------------------------------------
 
-#include <Bela.h>
-#include <libraries/Gui/Gui.h>
-#include <libraries/Scope/Scope.h>
-#include <libraries/Pipe/Pipe.h>
-#include <libraries/ne10/NE10.h>
-#include <libraries/sndfile/sndfile.h>
+#if MODE == MODE_REBUS
+
+// the antenna is connected to these analog inputs
+#define phase_pin 0
+#define magnitude_pin 4
+
+// magic numbers for mapping from antenna input
+#define phase_min 0.01
+#define phase_max 0.44
+#define magnitude_min 0.150467
+#define magnitude_max 0.3
+
+// REBUS doesn't need a mains hum notch filter
+#ifdef CONTROL_NOTCH
+#define CONTROL_NOTCH_DEFINED 1
+#else
+#define CONTROL_NOTCH_DEFINED 0
+#define CONTROL_NOTCH 0
+#endif
+
+// REBUS sometimes needs a noise reduction low pass filter
+// default to off, enable only when necessary
+#ifdef CONTROL_LOP
+#define CONTROL_LOP_DEFINED 1
+#else
+#define CONTROL_LOP_DEFINED 0
+#define CONTROL_LOP 0
+#endif
+
+#else
+
+//---------------------------------------------------------------------
+
+#if MODE == MODE_PINS
+
+// the wires are connected to these analog inputs
+#define phase_pin 0
+#define magnitude_pin 4
+
+// magic numbers for mapping from wire input
+#define phase_min 0
+#define phase_max 1
+#define magnitude_min 0
+#define magnitude_max 1
+
+// wires benefit from a mains hum notch filter
+#ifdef CONTROL_NOTCH
+#define CONTROL_NOTCH_DEFINED 1
+#else
+#define CONTROL_NOTCH_DEFINED 0
+#define CONTROL_NOTCH 1
+#endif
+
+// wires benefit from a noise reduction low pass filter
+#ifdef CONTROL_LOP
+#define CONTROL_LOP_DEFINED 1
+#else
+#define CONTROL_LOP_DEFINED 0
+#define CONTROL_LOP 1
+#endif
+
+#endif
+#endif
+
+//---------------------------------------------------------------------
+
+// mains hum removal notch filter parameters
+// only used when CONTROL_NOTCH is not 0
+
+#ifdef MAINS_HUM_FREQUENCY
+#define MAINS_HUM_FREQUENCY_DEFINED 1
+#else
+#define MAINS_HUM_FREQUENCY_DEFINED 0
+#define MAINS_HUM_FREQUENCY 50
+#endif
+
+#ifdef MAINS_HUM_QFACTOR
+#define MAINS_HUM_QFACTOR_DEFINED 1
+#else
+#define MAINS_HUM_QFACTOR_DEFINED 0
+#define MAINS_HUM_QFACTOR 3
+#endif
+
+//---------------------------------------------------------------------
+// dependencies
+
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <time.h>
-
 // for the nothrow version of new (memory allocation and construction)
 #include <new>
+
+#include <Bela.h>
+
+#if SCOPE
+#include <libraries/Scope/Scope.h>
+#endif
+
+#if RECORD
+#include <libraries/Pipe/Pipe.h>
+#include <libraries/sndfile/sndfile.h>
+#endif
+
+#if CONTROL_NOTCH || CONTROL_LOP
+#include "dsp.h"
+#endif
 
 //---------------------------------------------------------------------
 // composition API, to be implemented by client code
@@ -79,11 +188,6 @@ struct COMPOSITION;
 bool COMPOSITION_setup(BelaContext *context, struct COMPOSITION *C);
 void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, float out[2], const float in[2], const float magnitude, const float phase);
 void COMPOSITION_cleanup(BelaContext *context, struct COMPOSITION *C);
-
-//---------------------------------------------------------------------
-
-#define SCOPE 1
-#define GUI (MODE == MODE_BELA)
 
 //---------------------------------------------------------------------
 
@@ -117,11 +221,12 @@ struct STATE
 {
 
 //---------------------------------------------------------------------
+
+	// composition state
 	COMPOSITION_T composition;
-//---------------------------------------------------------------------
-
 
 //---------------------------------------------------------------------
+
 #if RECORD
 
 	// recording state
@@ -150,19 +255,39 @@ struct STATE
 	unsigned int items;
 
 #endif
+
+//---------------------------------------------------------------------
+
+#if SCOPE
+
+	// oscilloscope state
+	Scope scope;
+
+#endif
+
+//---------------------------------------------------------------------
+
+#if CONTROL_NOTCH
+
+	// notch filter state
+	BIQUAD notch[2];
+
+#endif
+
+//---------------------------------------------------------------------
+
+#if CONTROL_LOP
+
+	// low pass filter state
+	LOP lop[2];
+
+#endif
+
 //---------------------------------------------------------------------
 
 };
 
 void *STATE_ptr = nullptr;
-
-#if GUI
-Gui gui;
-#endif
-
-#if SCOPE
-Scope scope;
-#endif
 
 //---------------------------------------------------------------------
 // setup
@@ -170,15 +295,6 @@ Scope scope;
 template <typename COMPOSITION_T>
 bool REBUS_setup(BelaContext *context, void *userData)
 {
-
-#if GUI
-	gui.setup(context->projectName);
-	gui.setBuffer('f', 2);
-#endif
-
-#if SCOPE
-	scope.setup(6, context->audioSampleRate);
-#endif
 
 	// allocate state
 	auto S = new(std::nothrow) STATE<COMPOSITION_T>();
@@ -189,6 +305,7 @@ bool REBUS_setup(BelaContext *context, void *userData)
 	STATE_ptr = S;
 
 //---------------------------------------------------------------------
+
 #if RECORD
 
 	// output audio file parameters
@@ -231,32 +348,89 @@ bool REBUS_setup(BelaContext *context, void *userData)
 		return false; // FIXME should this be a hard failure?
 	}
 	S->items = context->audioFrames * info.channels;
+
 #endif
-//---------------------------------------------------------------------
 
 //---------------------------------------------------------------------
-// composition render
+
+#if SCOPE
+
+	// set up six channel oscilloscope at audio rate
+	S->scope.setup(6, context->audioSampleRate);
+
+#endif
+
+//---------------------------------------------------------------------
+
+#if CONTROL_NOTCH
+
+	// clear filter state to 0
+	std::memset(&S->notch, 0, sizeof(S->notch));
+
+	// compute biquad filter coefficients
+	notch(&S->notch[0], MAINS_HUM_FREQUENCY, MAINS_HUM_QFACTOR);
+	notch(&S->notch[1], MAINS_HUM_FREQUENCY, MAINS_HUM_QFACTOR);
+
+#endif
+
+//---------------------------------------------------------------------
+
+#if CONTROL_LOP
+
+	// clear filter state to 0
+	std::memset(&S->lop, 0, sizeof(S->lop));
+
+#endif
+
+//---------------------------------------------------------------------
+
+	// composition setup
 	bool ok = COMPOSITION_setup(context, &S->composition);
+
 //---------------------------------------------------------------------
 
 	if (ok)
 	{
+		rt_printf("Starting composition '%s'.\n", COMPOSITION_name);
 
 		// print messages about the state of recording
-		// if RECORD is externally defined to 0,
-		// nothing is printed and recording is disabled
 #if RECORD
-		rt_printf("Recording to '%s'\n", record_path);
+		rt_printf("Recording to '%s'.\n", record_path);
 #else
+		rt_printf("Recording disabled.\n");
+#endif
 #if ! RECORD_DEFINED
 		rt_printf(
-			"Not recording.\n"
 			"'#define RECORD 1' before including the REBUS library to enable recording.\n"
 			"'#define RECORD 0' before including the REBUS library to hide these messages.\n"
 		);
 #endif
+
+		// print messages about the state of oscilloscope
+#if SCOPE
+		rt_printf("Oscilloscope enabled.\n");
+#else
+		rt_printf("Oscilloscope disabled.\n");
+#endif
+#if ! SCOPE_DEFINED
+		rt_printf(
+			"'#define SCOPE 0' before including the REBUS library to disable oscilloscope.\n"
+			"'#define SCOPE 1' before including the REBUS library to hide these messages.\n"
+		);
 #endif
 
+		// print messages about the state of control filtering
+#if CONTROL_NOTCH
+		rt_printf("Using notch filter at %f Hz, Q %f to reduce mains hum.\n", (double) MAINS_HUM_FREQUENCY, (double) MAINS_HUM_QFACTOR);
+#endif
+#if CONTROL_LOP
+		rt_printf("Using low pass filter at %f Hz to reduce noise.\n", (double) 10);
+#endif
+
+	}
+	else
+	{
+		rt_printf("Setup failed for composition '%s'.\n", COMPOSITION_name);
 	}
 	return ok;
 }
@@ -275,27 +449,32 @@ void REBUS_render(BelaContext *context, void *userData)
 		in[0] = audioRead(context, n, 0);
 		in[1] = audioRead(context, n, 1);
 
-		// get controls
+		// get controls from analog IO pins
+		unsigned int m = n / 2; // FIXME depends on analog IO sample rate
+		const float raw_phase = analogRead(context, m, phase_pin);
+		const float raw_magnitude = analogRead(context, m, magnitude_pin);
 
-#if MODE == MODE_REBUS
-		// magic numbers for mapping from antenna input
-		const unsigned int phase_channel = 0;
-		const float phase_min = 0.01;
-		const float phase_max = 0.44;
-		const unsigned int magnitude_channel = 4;
-		const float magnitude_min = 0.150467;
-		const float magnitude_max = 0.3;
-		unsigned int m = n / 2; // FIXME depends on sample rate
-		const float phase = map(analogRead(context, m, phase_channel), phase_min, phase_max, 0, 1);
-		const float magnitude = map(analogRead(context, m, magnitude_channel), magnitude_min, magnitude_max, 0, 1);
+		float phase = raw_phase;
+		float magnitude = raw_magnitude;
 
-#elif MODE == MODE_BELA
-		DataBuffer& buffer = gui.getDataBuffer(0);
-		float* data = buffer.getAsFloat();
-		const float phase = data[0];
-		const float magnitude = data[1];
-
+#if CONTROL_NOTCH
+		// try to remove mains hum using a biquad notch filter
+		phase = biquad(&S->notch[0], phase);
+		magnitude = biquad(&S->notch[1], magnitude);
 #endif
+
+#if CONTROL_LOP
+		// try to remove noise using a low pass filter at 10 Hz
+		phase = lop(&S->lop[0], phase, 10);
+		magnitude = lop(&S->lop[1], magnitude, 10);
+#endif
+
+		// map to 0..1 range (FIXME remove this:
+		// this mapping should be done in the composition for efficiency
+		// because composition likely needs to do mapping too
+		// and mapping twice is waste of computational resources)
+		phase = map(phase, phase_min, phase_max, 0, 1);
+		magnitude = map(magnitude, magnitude_min, magnitude_max, 0, 1);
 
 		// render
 		float out[2] = { 0.0f, 0.0f };
@@ -306,8 +485,10 @@ void REBUS_render(BelaContext *context, void *userData)
 //---------------------------------------------------------------------
 
 		// output
+
 #if SCOPE
-		scope.log(out[0], out[1], in[0], in[1], magnitude, phase);
+		// write data to oscilloscope
+		S->scope.log(out[0], out[1], in[0], in[1], magnitude, phase);
 #endif
 
 #if RECORD
@@ -320,6 +501,7 @@ void REBUS_render(BelaContext *context, void *userData)
 		S->record_out[RECORD_CHANNELS * n + 5] = phase;
 #endif
 
+		// write audio output
 		audioWrite(context, n, 0, out[0]);
 		audioWrite(context, n, 1, out[1]);
 	}
