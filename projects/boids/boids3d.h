@@ -693,7 +693,7 @@ Point3d FindFlockCenter(t_boids *x)
 {
 	double			totalH = 0, totalV = 0, totalD = 0;
 	Point3d			centerPoint;
-	register short	i;
+	short	i;
 
 	for (i = 0 ; i <  x->numBoids; i++)
 	{
