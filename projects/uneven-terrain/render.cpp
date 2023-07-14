@@ -10,6 +10,11 @@ Phase and magnitude control many things in a non-uniform way.
 */
 
 //---------------------------------------------------------------------
+// options
+
+//#define RECORD 1
+
+//---------------------------------------------------------------------
 // dependencies
 
 #include <libraries/REBUS/REBUS.h>
@@ -179,7 +184,7 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *s,
 		+ 2 * sinf( 5 * sinf(3 * float(twopi) * p) * bass
 		          + float(pi) * sinf(3 * float(twopi) * m))
 		+ 4 * sinf(5 * float(twopi) * m) * sub
-		+ 3 * sinf(6 * float(twopi) * m) * fb[0]
+		+ 5 * sinf(6 * float(twopi) * m) * fb[0]
 		+ snares[0] + hats[0]
 		) * 0.5f
 	), 1);
@@ -188,7 +193,7 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *s,
 		+ 2 * sinf( 5 * sinf(4 * float(twopi) * p) * bass
 		          + float(pi) * sinf(4 * float(twopi) * m))
 		+ 4 * sinf(7 * float(twopi) * m) * sub
-		+ 3 * sinf(8 * float(twopi) * m) * fb[1]
+		+ 5 * sinf(8 * float(twopi) * m) * fb[1]
 		+ snares[1] + hats[1]
 		) * 0.5f
 	), 1);
