@@ -20,6 +20,7 @@ Slower oscillating motion makes lower pitched sounds.
 // #define MODE 1
 // #define RECORD 1
 // #define SCOPE 1
+// #define CONTROL_LOP 1
 
 //---------------------------------------------------------------------
 // dependencies
