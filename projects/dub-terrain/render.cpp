@@ -17,6 +17,7 @@ Phase controls stereo rotation of the feedback and filter frequencies.
 // #define MODE 1
 // #define RECORD 1
 // #define SCOPE 0
+// #define CONTROL_LOP 1
 
 //---------------------------------------------------------------------
 // dependencies
