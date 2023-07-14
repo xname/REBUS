@@ -18,17 +18,13 @@ default mode, configured by
 
 ### bela with wires (pseudo-antennas)
 
-change
+for testing/development without REBUS
 
 ```
-#define MODE MODE_REBUS
+#define MODE 1
 ```
 
-to
-
-```
-#define MODE MODE_PINS
-```
+before including the library
 
 or add `CPPFLAGS=-DMODE=1` to bela make options
 
@@ -54,6 +50,8 @@ before including the REBUS library.
 - phase
 
 filename is named after current localtime and composition name
+
+adds 10-15% CPU load with default block size
 
 ## composition API
 
