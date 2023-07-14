@@ -2,7 +2,7 @@
 
 //---------------------------------------------------------------------
 // NEON SIMD specialisations of dsp stuff ported from clive
-// by Claude Heiland-Allen 2023-06-27
+// by Claude Heiland-Allen 2023-06-27, 2023-07-14
 
 #include <arm_neon.h>
 #include <math.h>
@@ -18,6 +18,7 @@ typedef float32x4_t sample4;
 // maths
 //---------------------------------------------------------------------
 
+// compute sine and cosine of a vector of 4 angles
 static inline
 void sincos4(sample4 &si, sample4 &co, const sample4 &theta)
 {
@@ -38,6 +39,7 @@ void sincos4(sample4 &si, sample4 &co, const sample4 &theta)
 	}
 }
 
+// compute exponent of a vector of 4 values
 static inline
 sample4 exp4(const sample4 &x)
 {
@@ -64,6 +66,7 @@ sample4 exp4(const sample4 &x)
 
 // pd-0.45-5/src/d_math.c
 
+// convert vector of 4 MIDI note numbers to a vector of 4 frequencies in Hz (A 440)
 static inline
 sample4 mtof4(const sample4 &f)
 {
@@ -75,7 +78,10 @@ sample4 mtof4(const sample4 &f)
 //---------------------------------------------------------------------
 
 //---------------------------------------------------------------------
-// based on pd's [vcf~] [lop~] [hip~]
+// based on pd's [vcf~]
+
+// 4 parallel bandpass resonators (4 inputs and outputs)
+// 4 different frequencies, all same Q-factor
 
 typedef struct { float re[4], im[4]; } VCF4;
 
@@ -97,7 +103,8 @@ sample4 vcf4(VCF4 *s, const sample4 &x, const sample4 &hz, const sample &q)
 	cim = vmulq_f32(cim, r);
 	sample4 re2 = vld1q_f32(s->re);
 	sample4 im2 = vld1q_f32(s->im);
-	sample4 re = vaddq_f32(vmulq_n_f32(vmulq_f32(oneminusr, x), ampcorrect), vsubq_f32(vmulq_f32(cre, re2), vmulq_f32(cim, im2)));
+	sample4 re = vaddq_f32(vmulq_n_f32(vmulq_f32(oneminusr, x), ampcorrect)
+	           , vsubq_f32(vmulq_f32(cre, re2), vmulq_f32(cim, im2)));
 	sample4 im = vaddq_f32(vmulq_f32(cim, re2), vmulq_f32(cre, im2));
 	vst1q_f32(s->re, re);
 	vst1q_f32(s->im, im);
