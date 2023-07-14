@@ -7,7 +7,7 @@ by Claude Heiland-Allen 2011-10-18, 2023-06-16
 Spinning string drone physical model.
 
 Note: requires bigger block size to avoid underruns.
-Tested with block size 256, 60% CPU load.
+Tested with block size 512, 60% CPU load.
 
 */
 
