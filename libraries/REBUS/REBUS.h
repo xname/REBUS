@@ -35,7 +35,11 @@ converted to library 2023-06-28
 // #define RECORD 1 before including to enable recording.
 // #define RECORD 0 before including to keep recording disabled
 // and hide explanatory startup messages.
+//
 // default to no recording, to avoid accidentally filling the storage.
+//
+// with default block size, recording adds 10-15% to the CPU load
+// this additional cost reduces with larger block sizes
 
 #ifdef RECORD
 // RECORD was defined externally, hide messages

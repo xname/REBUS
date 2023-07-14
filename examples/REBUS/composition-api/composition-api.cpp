@@ -24,7 +24,11 @@ Settings->Make Parameters: CPPFLAGS="-DMODE=1"
 //---------------------------------------------------------------------
 
 // recordings of output, input and control signals
+//
 // takes 64MB/min, 1GB/15mins
+//
+// adds 10-15% to CPU load with default block size
+// this overhead reduces with larger block sizes
 
 // uncomment the next line to enable recording
 // #define RECORD 1
