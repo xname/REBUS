@@ -12,6 +12,14 @@ Tested with block size 256, 60% CPU load.
 */
 
 //---------------------------------------------------------------------
+// options
+
+// #define MODE 1
+// #define RECORD 1
+// #define SCOPE 0
+// #define CONTROL_LOP 1
+
+//---------------------------------------------------------------------
 // dependencies
 
 #include <libraries/REBUS/REBUS.h>
@@ -48,7 +56,7 @@ struct COMPOSITION
 	int N;
 	int w;
 	int phase;
-	R SR;
+	R sampleRate;
 	R HZ;
 	R f1;
 	R f2;
@@ -72,9 +80,9 @@ inline
 bool COMPOSITION_setup(BelaContext *context, struct COMPOSITION *C)
 {
 	std::memset(C, 0, sizeof(*C));
-	C->SR = context->audioSampleRate;
+	C->sampleRate = context->audioSampleRate;
 	C->HZ = 96000.0f / 1024.0f;
-	C->N = std::fmin(std::fmax(C->SR / C->HZ, (R)MINN), (R)MAXN);
+	C->N = std::fmin(std::fmax(C->sampleRate / C->HZ, (R)MINN), (R)MAXN);
 	for (int i = 0; i < C->N; ++i) {
 		C->string[C->w][i].z = -i;
 	}
@@ -134,8 +142,8 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, float out[2
 		// physical model
 		R a1 = 1 / (1 + C->f1 * C->f2);
 		R a2 = 1 / (1 + C->f1 * C->f2);
-		C->p1 += C->f1 * C->N / C->SR;
-		C->p2 += C->f2 * C->N / C->SR;
+		C->p1 += C->f1 * C->N / C->sampleRate;
+		C->p2 += C->f2 * C->N / C->sampleRate;
 		C->p1 -= std::floor(C->p1);
 		C->p2 -= std::floor(C->p2);
 		// first point is moved
