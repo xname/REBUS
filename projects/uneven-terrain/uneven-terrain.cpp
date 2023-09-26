@@ -2,7 +2,7 @@
 /*
 
 Uneven Terrain
-by Claude Heiland-Allen 2023-06-19, 2023-06-28, 2023-07-11
+by Claude Heiland-Allen 2023-06-19, 2023-06-28, 2023-07-11, 2023-09-26
 
 Techno with waveshaping and filters.
 Phase and magnitude control many things in a non-uniform way.
@@ -98,6 +98,10 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *s,
 	// reduces EMI noise (?) with REBUS controller
 	float m = lop(&s->lo[0], magnitude, 10);
 	float p = lop(&s->lo[1], phase, 10);
+
+	// make mapping less uneven
+	m *= 0.25;
+	p *= 0.25;
 
 	// clock for drum sounds
 	// phasor repeats every two beats at about 133bpm
