@@ -79,14 +79,14 @@ converted to library 2023-06-28
 #if MODE == MODE_REBUS
 
 // the antenna is connected to these analog inputs
-#define phase_pin 0
-#define magnitude_pin 4
+#define PHASE_PIN 0
+#define MAGNITUDE_PIN 4
 
 // magic numbers for mapping from antenna input
-#define phase_min 0.01
-#define phase_max 0.44
-#define magnitude_min 0.150467
-#define magnitude_max 0.3
+#define PHASE_MIN 0.01
+#define PHASE_MAX 0.44
+#define MAGNITUDE_MIN 0.150467
+#define MAGNITUDE_MAX 0.3
 
 // REBUS doesn't need a mains hum notch filter
 #ifdef CONTROL_NOTCH
@@ -112,14 +112,14 @@ converted to library 2023-06-28
 #if MODE == MODE_PINS
 
 // the wires are connected to these analog inputs
-#define phase_pin 0
-#define magnitude_pin 4
+#define PHASE_PIN 0
+#define MAGNITUDE_PIN 4
 
 // magic numbers for mapping from wire input
-#define phase_min 0
-#define phase_max 1
-#define magnitude_min 0
-#define magnitude_max 1
+#define PHASE_MIN 0
+#define PHASE_MAX 1
+#define MAGNITUDE_MIN 0
+#define MAGNITUDE_MAX 1
 
 // wires benefit from a mains hum notch filter
 #ifdef CONTROL_NOTCH
@@ -220,7 +220,7 @@ void COMPOSITION_cleanup(BelaContext *context, struct COMPOSITION *C);
 #define RECORD_CHANNELS 6
 
 // RECORD_SIZE must be >= block size * channels
-#define RECORD_SIZE (1024 * RECORD_CHANNELS)
+#define RECORD_SIZE (4096 * RECORD_CHANNELS)
 
 // forward declare the non-realtime record task callback
 template <typename COMPOSITION_T>
@@ -250,23 +250,23 @@ struct STATE
 	// this interleaved buffer is written by
 	// the realtime audio thread
 	// during the render callback
-	float record_out[RECORD_SIZE];
+	float recordOut[RECORD_SIZE];
 
 	// this interleaved buffer is written by
 	// the non-realtime sound file writer task
 	// during the task callback
-	float record_in[RECORD_SIZE];
+	float recordIn[RECORD_SIZE];
 
 	// the non-realtime sound file writer task
-	AuxiliaryTask record_task;
+	AuxiliaryTask recordTask;
 
 	// communication from realtime audio to non-realtime sound file writer
 	Pipe pipe;
 
 	// output sound file handle
-	SNDFILE *out_file;
+	SNDFILE *outFile;
 
-	// the number of items stored in the record_out buffer
+	// the number of items stored in the recordOut buffer
 	// during each run of the realtime audio render callback
 	unsigned int items;
 
@@ -304,10 +304,10 @@ struct STATE
 #if REPORT_STATUS
 
 	// how often to report composition status
-	int blocks_per_report;
+	int blocksPerReport;
 
 	// counts elapsed
-	int blocks_elapsed;
+	int blocksElapsed;
 
 #endif
 
@@ -344,24 +344,24 @@ bool REBUS_setup(BelaContext *context, void *userData)
 
 	// create a filename based on the current date and time
 	// with the composition name appended
-	char record_path[1000];
-	time_t seconds_since_epoch = time(0);
-	struct tm *t = localtime(&seconds_since_epoch);
+	char recordPath[1000];
+	time_t secondsSinceEpoch = time(0);
+	struct tm *t = localtime(&secondsSinceEpoch);
 	if (t)
 	{
 		// human-readable datetime format
-		snprintf(record_path, sizeof(record_path), "%04d-%02d-%02d-%02d-%02d-%02d-%s.wav", 1900 + t->tm_year, t->tm_mon + 1, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec, COMPOSITION_name);
+		snprintf(recordPath, sizeof(recordPath), "%04d-%02d-%02d-%02d-%02d-%02d-%s.wav", 1900 + t->tm_year, t->tm_mon + 1, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec, COMPOSITION_name);
 	}
 	else
 	{
 		// cryptically-named fallback in case the localtime() function fails
-		snprintf(record_path, sizeof(record_path), "%08x-%s.wav", (unsigned int) seconds_since_epoch, COMPOSITION_name);
+		snprintf(recordPath, sizeof(recordPath), "%08x-%s.wav", (unsigned int) secondsSinceEpoch, COMPOSITION_name);
 	}
 
 	// open the output sound file
-	if (! (S->out_file = sf_open(record_path, SFM_WRITE, &info)))
+	if (! (S->outFile = sf_open(recordPath, SFM_WRITE, &info)))
 	{
-		rt_printf("Could not open '%s' for recording.\n", record_path);
+		rt_printf("Could not open '%s' for recording.\n", recordPath);
 		return false; // FIXME should this be a hard failure?
 	}
 
@@ -370,7 +370,7 @@ bool REBUS_setup(BelaContext *context, void *userData)
 	S->pipe.setup("record-pipe", 65536, false, false);
 
 	// create the non-realtime sound file writer task
-	if (! (S->record_task = Bela_createAuxiliaryTask(&REBUS_record<COMPOSITION_T>, 90, "record")))
+	if (! (S->recordTask = Bela_createAuxiliaryTask(&REBUS_record<COMPOSITION_T>, 90, "record")))
 	{
 		rt_printf("Could not create recorder task.\n");
 		return false; // FIXME should this be a hard failure?
@@ -415,9 +415,9 @@ bool REBUS_setup(BelaContext *context, void *userData)
 #if REPORT_STATUS
 
 	// report status every 30secs
-	float seconds_per_report = 30;
-	S->blocks_per_report = seconds_per_report * context->audioSampleRate / context->audioFrames;
-	S->blocks_elapsed = 0;
+	float secondsPerReport = 30;
+	S->blocksPerReport = secondsPerReport * context->audioSampleRate / context->audioFrames;
+	S->blocksElapsed = 0;
 
 #endif
 
@@ -440,7 +440,7 @@ bool REBUS_setup(BelaContext *context, void *userData)
 			"  '#define RECORD 0' before including REBUS to disable recording."
 #endif
 			"\n"
-		, record_path);
+		, recordPath);
 #else
 		rt_printf(
 			"Recording disabled."
@@ -502,11 +502,11 @@ void REBUS_render(BelaContext *context, void *userData)
 
 		// get controls from analog IO pins
 		unsigned int m = n / 2; // FIXME depends on analog IO sample rate
-		const float raw_phase = analogRead(context, m, phase_pin);
-		const float raw_magnitude = analogRead(context, m, magnitude_pin);
+		const float rawPhase = analogRead(context, m, PHASE_PIN);
+		const float rawMagnitude = analogRead(context, m, MAGNITUDE_PIN);
 
-		float phase = raw_phase;
-		float magnitude = raw_magnitude;
+		float phase = rawPhase;
+		float magnitude = rawMagnitude;
 
 #if CONTROL_NOTCH
 		// try to remove mains hum using a biquad notch filter
@@ -524,8 +524,8 @@ void REBUS_render(BelaContext *context, void *userData)
 		// this mapping should be done in the composition for efficiency
 		// because composition likely needs to do mapping too
 		// and mapping twice is waste of computational resources)
-		phase = map(phase, phase_min, phase_max, 0, 1);
-		magnitude = map(magnitude, magnitude_min, magnitude_max, 0, 1);
+		phase = map(phase, PHASE_MIN, PHASE_MAX, 0, 1);
+		magnitude = map(magnitude, MAGNITUDE_MIN, MAGNITUDE_MAX, 0, 1);
 
 		// render
 		float out[2] = { 0.0f, 0.0f };
@@ -544,12 +544,12 @@ void REBUS_render(BelaContext *context, void *userData)
 
 #if RECORD
 		// write data to interleaved buffer
-		S->record_out[RECORD_CHANNELS * n + 0] = out[0];
-		S->record_out[RECORD_CHANNELS * n + 1] = out[1];
-		S->record_out[RECORD_CHANNELS * n + 2] = in[0];
-		S->record_out[RECORD_CHANNELS * n + 3] = in[1];
-		S->record_out[RECORD_CHANNELS * n + 4] = magnitude;
-		S->record_out[RECORD_CHANNELS * n + 5] = phase;
+		S->recordOut[RECORD_CHANNELS * n + 0] = out[0];
+		S->recordOut[RECORD_CHANNELS * n + 1] = out[1];
+		S->recordOut[RECORD_CHANNELS * n + 2] = in[0];
+		S->recordOut[RECORD_CHANNELS * n + 3] = in[1];
+		S->recordOut[RECORD_CHANNELS * n + 4] = magnitude;
+		S->recordOut[RECORD_CHANNELS * n + 5] = phase;
 #endif
 
 		// write audio output
@@ -559,16 +559,16 @@ void REBUS_render(BelaContext *context, void *userData)
 
 #if RECORD
 	// send data to non-realtime audio file writer
-	S->pipe.writeRt(&S->record_out[0], S->items);
-	Bela_scheduleAuxiliaryTask(S->record_task);
+	S->pipe.writeRt(&S->recordOut[0], S->items);
+	Bela_scheduleAuxiliaryTask(S->recordTask);
 #endif
 
 #if REPORT_STATUS
 	// report status every so often
-	if (++(S->blocks_elapsed) >= S->blocks_per_report)
+	if (++(S->blocksElapsed) >= S->blocksPerReport)
 	{
 		rt_printf("Composition '%s' is still running.\n", COMPOSITION_name);
-		S->blocks_elapsed = 0;
+		S->blocksElapsed = 0;
 	}
 #endif
 
@@ -585,10 +585,10 @@ void REBUS_record(void *)
 	STATE<COMPOSITION_T> *S = (STATE<COMPOSITION_T> *) STATE_ptr;
 	int ret;
 	// receive interleaved data from the realtime audio thread...
-	while (S->items && (ret = S->pipe.readNonRt(&S->record_in[0], S->items)) > 0 && S->out_file)
+	while (S->items && (ret = S->pipe.readNonRt(&S->recordIn[0], S->items)) > 0 && S->outFile)
 	{
 		// ...and write it to the recording sound file
-		sf_write_float(S->out_file, &S->record_in[0], ret);
+		sf_write_float(S->outFile, &S->recordIn[0], ret);
 	}
 }
 #endif
@@ -605,11 +605,11 @@ void REBUS_cleanup(BelaContext *context, void *userData)
 
 #if RECORD
 		// finish the recording
-		if (S->out_file)
+		if (S->outFile)
 		{
-			sf_write_sync(S->out_file);
-			sf_close(S->out_file);
-			S->out_file = nullptr;
+			sf_write_sync(S->outFile);
+			sf_close(S->outFile);
+			S->outFile = nullptr;
 		}
 #endif
 
