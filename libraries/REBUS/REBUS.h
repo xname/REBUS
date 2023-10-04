@@ -160,6 +160,18 @@ converted to library 2023-06-28
 #endif
 
 //---------------------------------------------------------------------
+
+// composition status reporting
+// defaults to enabled
+// #define REPORT_STATUS 0 before including to disable
+#ifdef REPORT_STATUS
+#define REPORT_STATUS_DEFINED 1
+#else
+#define REPORT_STATUS_DEFINED 0
+#define REPORT_STATUS 1
+#endif
+
+//---------------------------------------------------------------------
 // dependencies
 
 #include <cmath>
@@ -289,6 +301,18 @@ struct STATE
 
 //---------------------------------------------------------------------
 
+#if REPORT_STATUS
+
+	// how often to report composition status
+	int blocks_per_report;
+
+	// counts elapsed
+	int blocks_elapsed;
+
+#endif
+
+//---------------------------------------------------------------------
+
 };
 
 void *STATE_ptr = nullptr;
@@ -383,6 +407,17 @@ bool REBUS_setup(BelaContext *context, void *userData)
 
 	// clear filter state to 0
 	std::memset(&S->lop, 0, sizeof(S->lop));
+
+#endif
+
+//---------------------------------------------------------------------
+
+#if REPORT_STATUS
+
+	// report status every 30secs
+	float seconds_per_report = 30;
+	S->blocks_per_report = seconds_per_report * context->audioSampleRate / context->audioFrames;
+	S->blocks_elapsed = 0;
 
 #endif
 
@@ -526,6 +561,15 @@ void REBUS_render(BelaContext *context, void *userData)
 	// send data to non-realtime audio file writer
 	S->pipe.writeRt(&S->record_out[0], S->items);
 	Bela_scheduleAuxiliaryTask(S->record_task);
+#endif
+
+#if REPORT_STATUS
+	// report status every so often
+	if (++(S->blocks_elapsed) >= S->blocks_per_report)
+	{
+		rt_printf("Composition '%s' is still running.\n", COMPOSITION_name);
+		S->blocks_elapsed = 0;
+	}
 #endif
 
 }
