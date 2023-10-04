@@ -89,7 +89,7 @@ bool COMPOSITION_setup(BelaContext *context, struct COMPOSITION *C)
 // called once per audio frame (default 44100Hz sample rate)
 
 inline
-void COMPOSITION_render(BelaContext *context, struct COMPOSITION *s,
+void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C,
   float out[2], const float in[2], const float magnitude, const float phase)
 {
 	static const sample4 prime2pi =
@@ -99,7 +99,7 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *s,
 	// dry drum sounds
 	sample tempo = 0.4; // about 96bpm
 	// ramps from 0 to 1 once each bar
-	sample clock = phasor(&s->clock, tempo);
+	sample clock = phasor(&C->clock, tempo);
 	clock = 1 - clock;
 	// these squarings are more computationally efficient than powf(clock, 64)
 	clock *= clock;
@@ -111,40 +111,40 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *s,
 	// the kick is a sine wave with decaying frequency (chirp)
 	sample kick = sinf(32 * float(pi) * clock);
 	// the bass is resonant high pass filtered
-	sample bass = kick - biquad(&s->bass, kick);
+	sample bass = kick - biquad(&C->bass, kick);
 	// the sub is resonant low pass filtered
-	sample sub = biquad(&s->sub, kick);
+	sample sub = biquad(&C->sub, kick);
 
 	// four channels of feedback with different delay times (stereo)
 	sample4 feedback0, feedback1;
 	for (int i = 0; i < 4; ++i)
 	{
-		feedback0[i] = delread1(&s->del[0].del, 1000 / tempo * 1 / (i + 1.5));
-		feedback1[i] = delread1(&s->del[1].del, 1000 / tempo * 1 / (i + 1.5));
+		feedback0[i] = delread1(&C->del[0].del, 1000 / tempo * 1 / (i + 1.5));
+		feedback1[i] = delread1(&C->del[1].del, 1000 / tempo * 1 / (i + 1.5));
 	}
 
 	// rotate delayed feedbacks in stereo field
 	// rotation angles are multiples of the phase control
 	// compute sine and cosine of four multiples of the phase control
-	sample4 sin_phase, cos_phase;
-	sincos4(sin_phase, cos_phase, vmulq_n_f32(prime2pi, phase));
+	sample4 sinPhase, cosPhase;
+	sincos4(sinPhase, cosPhase, vmulq_n_f32(prime2pi, phase));
 	// do four matrix-vector multiplications for the four channels
-	sample4 tmp0 = vsubq_f32(vmulq_f32(cos_phase, feedback0),
-	                         vmulq_f32(sin_phase, feedback1));
-	sample4 tmp1 = vaddq_f32(vmulq_f32(sin_phase, feedback0),
-	                         vmulq_f32(cos_phase, feedback1));
+	sample4 tmp0 = vsubq_f32(vmulq_f32(cosPhase, feedback0),
+	                         vmulq_f32(sinPhase, feedback1));
+	sample4 tmp1 = vaddq_f32(vmulq_f32(sinPhase, feedback0),
+	                         vmulq_f32(cosPhase, feedback1));
 	feedback0 = tmp0;
 	feedback1 = tmp1;
 
 	// calculate filter parameters (q, hz)
 	// compute sine and cosine of four multiples of the magnitude control
-	sample4 sin_magnitude, ignored;
-	sincos4(sin_magnitude, ignored, vmulq_n_f32(prime2pi, magnitude));
+	sample4 sinMagnitude, ignored;
+	sincos4(sinMagnitude, ignored, vmulq_n_f32(prime2pi, magnitude));
 	// filter q factor is constant for all of them
 	sample q = 3;
 	// filter frequency is based on multiples of the phase control
 	sample4 hz = mtof4(vaddq_f32(vmulq_n_f32(
-		vmulq_n_f32(vsubq_f32(one, cos_phase), 0.5f),
+		vmulq_n_f32(vsubq_f32(one, cosPhase), 0.5f),
 		84.0f - 36.0f), vmovq_n_f32(36.0f)));
 	// permute the frequencies for a bit more variation
 	{ sample t = hz[3]; hz[3] = hz[0]; hz[0] = t; }
@@ -152,8 +152,8 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *s,
 
 	// four parallel bandpass filter for each of two channels
 	// the feedback gain is applied here too
-	feedback0 = vcf4(&s->bandpass[0], vmulq_f32(sin_magnitude, feedback0), hz, q);
-	feedback1 = vcf4(&s->bandpass[1], vmulq_f32(sin_magnitude, feedback1), hz, q);
+	feedback0 = vcf4(&C->bandpass[0], vmulq_f32(sinMagnitude, feedback0), hz, q);
+	feedback1 = vcf4(&C->bandpass[1], vmulq_f32(sinMagnitude, feedback1), hz, q);
 
 	// waveshaping / mixing
 	// overall non-feedback gain is based on the magnitude control
@@ -166,8 +166,8 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *s,
 		+ feedback1[0] + feedback1[1] + feedback1[2] + feedback1[3]);
 
 	// write the output to the delay lines for future feedback
-	delwrite(&s->del[0].del, out[0]);
-	delwrite(&s->del[1].del, out[1]);
+	delwrite(&C->del[0].del, out[0]);
+	delwrite(&C->del[1].del, out[1]);
 }
 
 //---------------------------------------------------------------------

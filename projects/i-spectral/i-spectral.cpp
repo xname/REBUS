@@ -62,27 +62,27 @@ struct COMPOSITION
 	// raised cosine window
 	float *window; //[BLOCK];
 	// counts up to hop size
-	unsigned int sample_ix;
+	unsigned int sampleIx;
 	// ring buffer index for input buffer writing
-	unsigned int input_ix;
+	unsigned int inputIx;
 	// ring buffer index for output buffer writing
-	unsigned int output_ix_w;
+	unsigned int outputIxW;
 	// ring buffer index for output buffer reading
-	unsigned int output_ix_r;
+	unsigned int outputIxR;
 	// (I)FFT configuration data
-	ne10_fft_r2c_cfg_float32_t fft_config;
+	ne10_fft_r2c_cfg_float32_t fftConfig;
 	// copies of the ring buffer indices for use by the FFT process
-	unsigned int fft_output_ix_w;
-	unsigned int fft_input_ix;
+	unsigned int fftOutputIxW;
+	unsigned int fftInputIx;
 	// background task for FFT
-	AuxiliaryTask process_task;
+	AuxiliaryTask processTask;
 	// flag to detect too-slow computation
-	volatile bool inprocess;
+	volatile bool inProcess;
 	// audio output DC blocking filter state (stereo)
 	float dc[2];
 	// phase input bandpasss filter
-	LOP phase_lop;
-	HIP phase_hip;
+	LOP phaseLowpass;
+	HIP phaseHighpass;
 };
 
 //---------------------------------------------------------------------
@@ -99,19 +99,19 @@ void COMPOSITION_process(void *)
 	// we're busy
 	// if we're still busy by the time of the next block,
 	// then the computer is too slow
-	C->inprocess = true;
+	C->inProcess = true;
 
 	// reblock and window input
-	unsigned int input_ptr = (C->fft_input_ix + BUFFER - BLOCK) % BUFFER;
+	unsigned int inputIx = (C->fftInputIx + BUFFER - BLOCK) % BUFFER;
 	for (unsigned int n = 0; n < BLOCK; ++n)
 	{
-		C->block[n] = C->input[input_ptr] * C->window[n];
-		++input_ptr;
-		input_ptr %= BUFFER;
+		C->block[n] = C->input[inputIx] * C->window[n];
+		++inputIx;
+		inputIx %= BUFFER;
 	}
 
 	// fft
-	ne10_fft_r2c_1d_float32_neon(C->motion, C->block, C->fft_config);
+	ne10_fft_r2c_1d_float32_neon(C->motion, C->block, C->fftConfig);
 
 	// stereo sound synthesizer
 	for (unsigned int channel = 0; channel < 2; ++channel)
@@ -138,10 +138,10 @@ void COMPOSITION_process(void *)
 		}
 
 		// ifft
-		ne10_fft_c2r_1d_float32_neon(C->block, C->synth, C->fft_config);
+		ne10_fft_c2r_1d_float32_neon(C->block, C->synth, C->fftConfig);
 
 		// windowed overlap add into output buffer
-		unsigned int output_ptr = C->fft_output_ix_w % BUFFER;
+		unsigned int output_ptr = C->fftOutputIxW % BUFFER;
 		for (unsigned int n = 0; n < BLOCK; ++n)
 		{
 			C->output[channel][output_ptr] += C->block[n] * C->window[n];
@@ -151,7 +151,7 @@ void COMPOSITION_process(void *)
 	}
 
 	// we're done
-	C->inprocess = false;
+	C->inProcess = false;
 }
 
 //---------------------------------------------------------------------
@@ -188,12 +188,12 @@ bool COMPOSITION_setup(BelaContext *context, COMPOSITION *C)
 	}
 
 	// FFT task runs at lower priority possibly taking several DSP blocks to complete
-	C->output_ix_w = HOP;
-	if (! (C->process_task = Bela_createAuxiliaryTask(&COMPOSITION_process, 90, "fft-process")))
+	C->outputIxW = HOP;
+	if (! (C->processTask = Bela_createAuxiliaryTask(&COMPOSITION_process, 90, "fft-process")))
 	{
 		return false;
 	}
-	if (! (C->fft_config = ne10_fft_alloc_r2c_float32(BLOCK)))
+	if (! (C->fftConfig = ne10_fft_alloc_r2c_float32(BLOCK)))
 	{
 		return false;
 	}
@@ -214,22 +214,22 @@ void COMPOSITION_render(BelaContext *context, COMPOSITION *C,
 {
 	// read input
 	// band-pass filter (hip to avoid DC offsets, lop to avoid aliasing)
-	float phase_bp = 2 * phase - 1;
-	phase_bp = lop(&C->phase_lop, hip(&C->phase_hip, phase_bp, 10.0f / (float)HOP), 100.0f);
-	if (C->sample_ix == 0)
+	float phaseBandpass = 2 * phase - 1;
+	phaseBandpass = lop(&C->phaseLowpass, hip(&C->phaseHighpass, phaseBandpass, 10.0f / (float)HOP), 100.0f);
+	if (C->sampleIx == 0)
 	{
 		// decimate (one sample per HOP)
-		C->input[C->input_ix] = phase_bp;
+		C->input[C->inputIx] = phaseBandpass;
 		// advance
-		++C->input_ix;
-		C->input_ix %= BUFFER;
+		++C->inputIx;
+		C->inputIx %= BUFFER;
 	}
 	// amplify
 	float gain = magnitude;
 	gain *= gain * GAIN;
 	for (unsigned int channel = 0; channel < 2; ++channel)
 	{
-		float o = gain * C->output[channel][C->output_ix_r];
+		float o = gain * C->output[channel][C->outputIxR];
 
 		// simple dc-blocking high pass filter
 		C->dc[channel] *= 0.999f;
@@ -240,30 +240,30 @@ void COMPOSITION_render(BelaContext *context, COMPOSITION *C,
 		out[channel] = std::tanh(o);
 
 		// reset for next overlap add
-		C->output[channel][(C->output_ix_r + BUFFER / 2) % BUFFER] = 0;
+		C->output[channel][(C->outputIxR + BUFFER / 2) % BUFFER] = 0;
 	}
 
 	// advance
-	++C->output_ix_r;
-	C->output_ix_r %= BUFFER;
-	++C->output_ix_w;
-	C->output_ix_w %= BUFFER;
-	++C->sample_ix;
-	if (C->sample_ix >= HOP)
+	++C->outputIxR;
+	C->outputIxR %= BUFFER;
+	++C->outputIxW;
+	C->outputIxW %= BUFFER;
+	++C->sampleIx;
+	if (C->sampleIx >= HOP)
 	{
 		// enqueue FFT process
-		C->fft_input_ix = C->input_ix;
-		C->fft_output_ix_w = C->output_ix_w;
-		if (C->inprocess)
+		C->fftInputIx = C->inputIx;
+		C->fftOutputIxW = C->outputIxW;
+		if (C->inProcess)
 		{
 			// the FFT task is still in progress, should not happen
 			rt_printf("TOO SLOW\n");
 		}
 		else
 		{
-			Bela_scheduleAuxiliaryTask(C->process_task);
+			Bela_scheduleAuxiliaryTask(C->processTask);
 		}
-		C->sample_ix = 0;
+		C->sampleIx = 0;
 	}
 }
 
