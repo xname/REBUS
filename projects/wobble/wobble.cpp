@@ -19,7 +19,7 @@ TODO: figure out how to get rid of clicks.
 //---------------------------------------------------------------------
 // options
 
-//#define RECORD 1
+#define RECORD 1
 //#define SCOPE 0
 //#define CONTROL_LOP 1
 //#define CONTROL_NOTCH 1
@@ -38,24 +38,39 @@ const char *COMPOSITION_name = "wobble";
 //---------------------------------------------------------------------
 // composition state
 
+// state machine
+enum state
+{
+	sPlay,
+	sRecord,
+	sStop,
+	sMix
+};
+
 #define SAMPLES_PER_QUARTER_BEAT 5000
+#define FADE_SAMPLES SAMPLES_PER_QUARTER_BEAT
 #define MAXIMUM_LOOP_QUARTER_BEATS 32
+#define MINIMUM_LOOP_QUARTER_BEATS 1
 #define MAXIMUM_LOOP_SAMPLES (MAXIMUM_LOOP_QUARTER_BEATS * SAMPLES_PER_QUARTER_BEAT)
-#define NUMBER_OF_LOOPS 4
+#define MINIMUM_LOOP_SAMPLES (MINIMUM_LOOP_QUARTER_BEATS * SAMPLES_PER_QUARTER_BEAT)
+#define NUMBER_OF_LOOPS 2
 
 #define SAMPLES_PER_CYCLE 800
 
-#define STILLNESS_THRESHOLD 0.00001f
-#define STILLNESS_HYSTERESIS 10000.0f
+#define STILLNESS_THRESHOLD 0.0001f
+#define STILLNESS_HYSTERESIS 100.0f
 
 struct COMPOSITION
 {
-
 	// audio loop data
-	float loop[NUMBER_OF_LOOPS][MAXIMUM_LOOP_SAMPLES][2];
+	float loop[NUMBER_OF_LOOPS][MAXIMUM_LOOP_SAMPLES + FADE_SAMPLES][2];
 	int loopLength[NUMBER_OF_LOOPS]; // in (1..MAXIMUM_LOOP_SAMPLES]
 	int playbackIndex[NUMBER_OF_LOOPS]; // in [0..MAXIMUM_LOOP_SAMPLES)
-	bool recordingInProgress;
+
+	// state machine data
+	enum state state;
+	int stopIndex; // in [0..FADE_SAMPLES), only used in state sStop 
+	int mixIndex; // in [0..FADE_SAMPLES), only used in state sMix
 	int recordingLoopNumber; // in [0..NUMBER_OF_LOOPS)
 	int recordingIndex; //  in [0..MAXIMUM_LOOP_SAMPLES)
 
@@ -78,6 +93,7 @@ bool COMPOSITION_setup(BelaContext *context, struct COMPOSITION *C)
 	// clear everything to 0
 	std::memset(C, 0, sizeof(*C));
 
+	C->state = sPlay;
 	// set loop lengths to minimum, to avoid modulo/division by 0
 	for (int i = 0; i < NUMBER_OF_LOOPS; ++i)
 	{
@@ -123,59 +139,124 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C,
 	float dphase10 = p10 - p100;
 
 	// check for recording start / stop
-	if (! C->recordingInProgress)
+	float crossFade = 0;
+	switch (C->state)
 	{
-		if (! nonStill)
+		case sPlay:
 		{
-			// continue not recording
-		}
-		else
-		{
-			// start recording
-			C->recordingInProgress = true;
-			rt_printf("Recording loop %d\n", C->recordingLoopNumber);
-		}
-	}
-	if (C->recordingInProgress)
-	{
-		if (still || C->recordingIndex >= MAXIMUM_LOOP_SAMPLES)
-		{
-			// stop recording
-			C->recordingInProgress = false;
-			// quantize length, rounded down
-			int quarterBeats = C->recordingIndex / SAMPLES_PER_QUARTER_BEAT;
-			rt_printf("Recorded loop %d with %d quarter beats\n", C->recordingLoopNumber, quarterBeats);
-			C->loopLength[C->recordingLoopNumber] = quarterBeats * SAMPLES_PER_QUARTER_BEAT;
-			// guard against modulo/division by 0
-			if (C->loopLength[C->recordingLoopNumber] == 0)
+			if (! nonStill)
 			{
-				C->loopLength[C->recordingLoopNumber] = 1;
+				// continue not recording
+				break;
 			}
-			C->playbackIndex[C->recordingLoopNumber] %= C->loopLength[C->recordingLoopNumber]; // prevents crash, but clicks
-			// prepare for next recording
-			++C->recordingLoopNumber;
-			C->recordingLoopNumber %= NUMBER_OF_LOOPS;
-			C->recordingIndex = 0;
+			else
+			{
+				// significant motion
+				// start recording
+				C->state = sRecord;
+				rt_printf("Recording loop %d\n", C->recordingLoopNumber);
+			}
 		}
-		else
+		// fall-through
+		case sRecord:
 		{
-			// continue recording
-			C->loop[C->recordingLoopNumber][C->recordingIndex][0] = dmagnitude10;
-			C->loop[C->recordingLoopNumber][C->recordingIndex][1] = dphase10;
-			++C->recordingIndex;
+			if ((still || C->recordingIndex >= MAXIMUM_LOOP_SAMPLES) && ! (C->recordingIndex < MINIMUM_LOOP_SAMPLES))
+			{
+				// start stopping recording
+				C->state = sStop;
+				// quantize length, rounded down
+				int quarterBeats = C->recordingIndex / SAMPLES_PER_QUARTER_BEAT;
+				rt_printf("Recorded loop %d with %d quarter beats\n", C->recordingLoopNumber, quarterBeats);
+				C->loopLength[C->recordingLoopNumber] = quarterBeats * SAMPLES_PER_QUARTER_BEAT;
+				// guard against modulo/division by 0
+				if (C->loopLength[C->recordingLoopNumber] == 0)
+				{
+					C->loopLength[C->recordingLoopNumber] = 1;
+				}
+				C->stopIndex = C->loopLength[C->recordingLoopNumber] + FADE_SAMPLES;
+			}
+			else
+			{
+				// continue recording
+				C->loop[C->recordingLoopNumber][C->recordingIndex][0] = magnitude;
+				C->loop[C->recordingLoopNumber][C->recordingIndex][1] = phase;
+				++C->recordingIndex;
+				break;
+			}
+		}
+		// fall-through
+		case sStop:
+		{
+			if (C->recordingIndex < C->stopIndex)
+			{
+				// continue recording
+				C->loop[C->recordingLoopNumber][C->recordingIndex][0] = magnitude;
+				C->loop[C->recordingLoopNumber][C->recordingIndex][1] = phase;
+				++C->recordingIndex;
+				break;
+			}
+			else
+			{
+				C->mixIndex = 0;
+				C->playbackIndex[C->recordingLoopNumber] = 0;
+				C->state = sMix;
+			}
+		}
+		// fall-through
+		case sMix:
+		{
+			if (C->mixIndex < FADE_SAMPLES)
+			{
+				crossFade = C->mixIndex++ / (float) FADE_SAMPLES;
+				break;
+			}
+			else
+			{
+				crossFade = 0;
+				C->state = sPlay;
+				C->recordingLoopNumber += 1;
+				C->recordingLoopNumber %= NUMBER_OF_LOOPS;
+				C->recordingIndex = 0;
+			}
 		}
 	}
 
 	// read parameters from loop arrays
-	// play forward and backward simultaneously to avoid clicks at loop boundaries
-	float m0 = C->loop[0][C->playbackIndex[0]][0] + C->loop[0][C->loopLength[0]-1 - C->playbackIndex[0]][0];
-	float p0 = C->loop[0][C->playbackIndex[0]][1] + C->loop[0][C->loopLength[0]-1 - C->playbackIndex[0]][1];
-	float m1 = C->loop[1][C->playbackIndex[1]][0] + C->loop[1][C->loopLength[1]-1 - C->playbackIndex[1]][0];
-	float p1 = C->loop[1][C->playbackIndex[1]][1] + C->loop[1][C->loopLength[1]-1 - C->playbackIndex[1]][1];
-	float m2 = C->loop[2][C->playbackIndex[2]][0] + C->loop[2][C->loopLength[2]-1 - C->playbackIndex[2]][0];
-	float p2 = C->loop[2][C->playbackIndex[2]][1] + C->loop[2][C->loopLength[2]-1 - C->playbackIndex[2]][1];
-	float m3 = C->loop[3][C->playbackIndex[3]][0] + C->loop[3][C->loopLength[3]-1 - C->playbackIndex[3]][0];
-	float p3 = C->loop[3][C->playbackIndex[3]][1] + C->loop[3][C->loopLength[3]-1 - C->playbackIndex[3]][1];
+	int playingLoopNumber = (C->recordingLoopNumber + 1) % NUMBER_OF_LOOPS;
+
+	float m0 = C->loop[playingLoopNumber][C->playbackIndex[playingLoopNumber]][0];
+	float p0 = C->loop[playingLoopNumber][C->playbackIndex[playingLoopNumber]][1];
+	if (C->playbackIndex[playingLoopNumber] < FADE_SAMPLES)
+	{
+		// cross-fade end of loop
+		float t = C->playbackIndex[playingLoopNumber] / (float) FADE_SAMPLES;
+		int index = C->loopLength[playingLoopNumber] + C->playbackIndex[playingLoopNumber];
+		m0 = mix(C->loop[playingLoopNumber][index][0], m0, t);
+		p0 = mix(C->loop[playingLoopNumber][index][1], p0, t);
+	}
+
+	float m1 = C->loop[!playingLoopNumber][C->playbackIndex[!playingLoopNumber]][0];
+	float p1 = C->loop[!playingLoopNumber][C->playbackIndex[!playingLoopNumber]][1];
+	if (C->playbackIndex[!playingLoopNumber] < FADE_SAMPLES)
+	{
+		// cross-fade end of loop
+		float t = C->playbackIndex[!playingLoopNumber] / (float) FADE_SAMPLES;
+		int index = C->loopLength[!playingLoopNumber] + C->playbackIndex[!playingLoopNumber];
+		m1 = mix(C->loop[!playingLoopNumber][index][0], m1, t);
+		p1 = mix(C->loop[!playingLoopNumber][index][1], p1, t);
+	}
+
+	// mix with just-recorded loop
+	m0 = mix(m0, m1, crossFade);
+	p1 = mix(p0, p1, crossFade);
+
+	// fix up legacy parameters
+	m1 = 0;//C->loop[1][C->playbackIndex[1]][0] + C->loop[1][C->loopLength[1]-1 - C->playbackIndex[1]][0];
+	p1 = 0;//C->loop[1][C->playbackIndex[1]][1] + C->loop[1][C->loopLength[1]-1 - C->playbackIndex[1]][1];
+	float m2 = 0;//C->loop[2][C->playbackIndex[2]][0] + C->loop[2][C->loopLength[2]-1 - C->playbackIndex[2]][0];
+	float p2 = 0;//C->loop[2][C->playbackIndex[2]][1] + C->loop[2][C->loopLength[2]-1 - C->playbackIndex[2]][1];
+	float m3 = 0;//C->loop[3][C->playbackIndex[3]][0] + C->loop[3][C->loopLength[3]-1 - C->playbackIndex[3]][0];
+	float p3 = 0;//C->loop[3][C->playbackIndex[3]][1] + C->loop[3][C->loopLength[3]-1 - C->playbackIndex[3]][1];
 
 	// advance playback
 	for (int i = 0; i < NUMBER_OF_LOOPS; ++i)
