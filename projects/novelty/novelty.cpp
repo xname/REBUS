@@ -2,14 +2,14 @@
 /*
 
 Novelty
-by Claude Heiland-Allen 2023-10-10
+by Claude Heiland-Allen 2023-10-10, 2023-10-12
 
-Live audio granulator with gesture database.
+Audio granulator with gesture database.
 
-A database associates gestures with sounds.
+Training process associates gestures with sounds.
+This happens in the first ~20 seconds after launch.
 
-Gesture input plays the sound with best-matching gesture, and
-overwrites the worst-matching gesture with the input gesture and sound.
+Then gesture input plays the sound with best-matching gesture.
 
 */
 
@@ -40,7 +40,6 @@ const char *COMPOSITION_name = "novelty";
 struct Gesture
 {
 	float x[2 * GESTURE_LENGTH];
-	int birthday;
 };
 
 static
@@ -54,14 +53,13 @@ distance(const Gesture &a, const Gesture &b)
 		float delta = a.x[i] - b.x[i];
 		sum += delta * delta;
 	}
-	float delta = a.birthday - b.birthday;
-	return sum + 0.001f / (1 + delta); // prefer older sounds
+	return sum;
 }
 
 #define CHANNELS 2
-#define COUNT 1024 // size of database
+#define COUNT 2048 // size of database
 #define LENGTH 4096 // audio frames per grain
-#define OVERLAP 4 // number of simultaneous grains
+#define OVERLAP 8 // number of simultaneous grains
 #define GAIN (2.0f / OVERLAP) // output volume level
 #define NONE (-1) // sentinel index meaning take no action
 
@@ -81,7 +79,6 @@ struct COMPOSITION
 	int gesture_frame[OVERLAP]; // [0..LENGTH / GESTURE_LENGTH)
 	Gesture input_gesture[OVERLAP];
 	float input_audio[OVERLAP][LENGTH][CHANNELS];
-	int birthday; // incremented each gesture
 	LOP lowpass_filter[2];
 };
 
@@ -147,24 +144,33 @@ COMPOSITION_render(BelaContext *context, struct COMPOSITION *C,
 			float w = C->window[C->frame[i]];
 			C->input_gesture[i].x[2 * j + 0] = w * m;
 			C->input_gesture[i].x[2 * j + 1] = w * p;
-			C->input_gesture[i].birthday = C->birthday++;
 		}
 	}
 
 	// playback audio
-	out[0] = 0;
-	out[1] = 0;
-	for (int i = 0; i < OVERLAP; ++i)
+	if (C->count < COUNT)
 	{
-		if (C->best[i] != NONE)
+		// pass through during training
+		out[0] = in[0];
+		out[1] = in[1];
+	}
+	else
+	{
+		// play best matches
+		out[0] = 0;
+		out[1] = 0;
+		for (int i = 0; i < OVERLAP; ++i)
 		{
-			for (int c = 0; c < 2; ++c)
+			if (C->best[i] != NONE)
 			{
-				out[c] += C->audio[C->best[i]][C->frame[i]][c];
+				for (int c = 0; c < 2; ++c)
+				{
+					out[c] += C->audio[C->best[i]][C->frame[i]][c];
+				}
 			}
 		}
 	}
-
+	
 	// advance audio
 	for (int i = 0; i < OVERLAP; ++i)
 	{
@@ -195,10 +201,18 @@ COMPOSITION_render(BelaContext *context, struct COMPOSITION *C,
 				// fill database before overwriting
 				worst_index = C->count++;
 			}
-			//rt_printf("best(%d) = %g\tworst(%d) = %g\n", best_index, (double) best_distance, worst_index, (double) worst_distance);
+			else
+			{
+				// don't overwrite
+				worst_index = NONE;
+			}
 			C->best[i] = best_index;
 			C->worst[i] = worst_index;
-			C->gestures[worst_index] = C->input_gesture[i];
+			if (worst_index != NONE)
+			{
+				rt_printf("%d%%\n", 100 * worst_index / COUNT);
+				C->gestures[worst_index] = C->input_gesture[i];
+			}
 		}
 	}
 }
