@@ -35,9 +35,12 @@ const char *COMPOSITION_name = "novelty";
 //---------------------------------------------------------------------
 // composition state
 
+#define GESTURE_LENGTH 8
+
 struct Gesture
 {
-	float x[16];
+	float x[2 * GESTURE_LENGTH];
+	int birthday;
 };
 
 static
@@ -46,19 +49,20 @@ float
 distance(const Gesture &a, const Gesture &b)
 {
 	float sum = 0;
-	for (int i = 0; i < 16; ++i)
+	for (int i = 0; i < 2 * GESTURE_LENGTH; ++i)
 	{
 		float delta = a.x[i] - b.x[i];
 		sum += delta * delta;
 	}
-	return sum;
+	float delta = a.birthday - b.birthday;
+	return sum + 0.001f / (1 + delta); // prefer older sounds
 }
 
 #define CHANNELS 2
-#define COUNT 256 // size of database
+#define COUNT 1024 // size of database
 #define LENGTH 4096 // audio frames per grain
 #define OVERLAP 4 // number of simultaneous grains
-#define GAIN 0.5f // output volume level
+#define GAIN (2.0f / OVERLAP) // output volume level
 #define NONE (-1) // sentinel index meaning take no action
 
 // cost per sample is O(OVERLAP * COUNT / LENGTH)
@@ -74,9 +78,10 @@ struct COMPOSITION
 	int frame[OVERLAP]; // [0..LENGTH)
 	int best[OVERLAP]; // [0..count)
 	int worst[OVERLAP]; // [0..count)
-	int gesture_frame[OVERLAP];
+	int gesture_frame[OVERLAP]; // [0..LENGTH / GESTURE_LENGTH)
 	Gesture input_gesture[OVERLAP];
 	float input_audio[OVERLAP][LENGTH][CHANNELS];
+	int birthday; // incremented each gesture
 	LOP lowpass_filter[2];
 };
 
@@ -103,7 +108,7 @@ COMPOSITION_setup(BelaContext *context, struct COMPOSITION *C)
 		C->frame[i] = LENGTH / OVERLAP * i;
 		C->best[i] = NONE;
 		C->worst[i] = NONE;
-		C->gesture_frame[i] = 128 * i;
+		C->gesture_frame[i] = LENGTH / OVERLAP / GESTURE_LENGTH * i;
 	}
 
 	// all ok
@@ -131,17 +136,18 @@ COMPOSITION_render(BelaContext *context, struct COMPOSITION *C,
 	}
 
 	// record gesture
-	float m = lop(&C->lowpass_filter[0], magnitude, 40);
-	float p = lop(&C->lowpass_filter[1], phase, 40);
+	float m = lop(&C->lowpass_filter[0], magnitude, 100);
+	float p = lop(&C->lowpass_filter[1], phase, 100);
 	for (int i = 0; i < OVERLAP; ++i)
 	{
-		if (++C->gesture_frame[i] == 512)
+		if (++C->gesture_frame[i] == LENGTH / GESTURE_LENGTH)
 		{
 			C->gesture_frame[i] = 0;
-			int j = C->frame[i] * 8 / LENGTH;
+			int j = C->frame[i] * GESTURE_LENGTH / LENGTH;
 			float w = C->window[C->frame[i]];
 			C->input_gesture[i].x[2 * j + 0] = w * m;
 			C->input_gesture[i].x[2 * j + 1] = w * p;
+			C->input_gesture[i].birthday = C->birthday++;
 		}
 	}
 
