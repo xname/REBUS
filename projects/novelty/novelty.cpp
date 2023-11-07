@@ -2,14 +2,16 @@
 /*
 
 Novelty
-by Claude Heiland-Allen 2023-10-10, 2023-10-12
+by Claude Heiland-Allen 2023-10-10, 2023-10-12, 2023-11-07
 
-Audio granulator with gesture database.
+Audio granulator with gesture matching.
 
 Training process associates gestures with sounds.
 This happens in the first ~20 seconds after launch.
 
 Then gesture input plays the sound with best-matching gesture.
+
+Recommended block size with default settings: 512 samples.
 
 */
 
@@ -33,53 +35,58 @@ Then gesture input plays the sound with best-matching gesture.
 const char *COMPOSITION_name = "novelty";
 
 //---------------------------------------------------------------------
+// configuration
+
+// cost per sample is O(OVERLAP * COUNT / GRAINLENGTH)
+// in bursts every GRAINLENGTH / OVERLAP samples
+// so block size GRAINLENGTH / OVERLAP is appropriate
+
+// channels must currently both be 2
+#define CONTROLCHANNELS 2 // magnitude and phase
+#define AUDIOCHANNELS 2 // stereo
+#define COUNT 2048 // size of database
+#define GRAINLENGTH 4096 // audio frames per grain
+#define OVERLAP 8 // number of simultaneous playback grains
+#define GAIN (2.0f / OVERLAP) // output volume level
+#define SUBSAMPLING 128 // ratio of audio to control sample rate
+#define CONTROLCUTOFF 100 // control data filter cutoff frequency
+#define GESTURELENGTH (GRAINLENGTH / SUBSAMPLING) // points per gesture
+#define JITTER 1 // set to 1 to enable pseudo-random jitter for variety
+
+#define AUDIOFRAMES (COUNT * GRAINLENGTH / OVERLAP)
+#define CONTROLFRAMES (COUNT * GRAINLENGTH / OVERLAP / SUBSAMPLING)
+
+#define NONE (-1) // sentinel value for playbackOffset, for silence
+
+//---------------------------------------------------------------------
 // composition state
 
-#define GESTURE_LENGTH 8
-
-struct Gesture
-{
-	float x[2 * GESTURE_LENGTH];
-};
-
-static
-inline
-float
-distance(const Gesture &a, const Gesture &b)
-{
-	float sum = 0;
-	for (int i = 0; i < 2 * GESTURE_LENGTH; ++i)
-	{
-		float delta = a.x[i] - b.x[i];
-		sum += delta * delta;
-	}
-	return sum;
-}
-
-#define CHANNELS 2
-#define COUNT 2048 // size of database
-#define LENGTH 4096 // audio frames per grain
-#define OVERLAP 8 // number of simultaneous grains
-#define GAIN (2.0f / OVERLAP) // output volume level
-#define NONE (-1) // sentinel index meaning take no action
-
-// cost per sample is O(OVERLAP * COUNT / LENGTH)
-// in bursts every LENGTH / OVERLAP samples
-// so block size LENGTH / OVERLAP is appropriate
+enum COMPOSITIONMODE { RECORDING = 0, PLAYING = 1 };
 
 struct COMPOSITION
 {
-	float audio[COUNT][LENGTH][CHANNELS]; // 32 MiB with settings above
-	Gesture gestures[COUNT];
-	float window[LENGTH]; // raised cosine
-	int count; // [0..COUNT] current size of database
-	int frame[OVERLAP]; // [0..LENGTH)
-	int best[OVERLAP]; // [0..count)
-	int worst[OVERLAP]; // [0..count)
-	int gesture_frame[OVERLAP]; // [0..LENGTH / GESTURE_LENGTH)
-	Gesture input_gesture[OVERLAP];
-	float input_audio[OVERLAP][LENGTH][CHANNELS];
-	LOP lowpass_filter[2];
+	// database
+	float audio[AUDIOFRAMES][AUDIOCHANNELS];
+	float control[CONTROLFRAMES][CONTROLCHANNELS];
+
+	float audioWindow[GRAINLENGTH]; // raised cosine
+	float controlWindow[GESTURELENGTH]; // raised cosine
+
+	LOP controlFilter[CONTROLCHANNELS]; // for anti-aliasing
+	int controlCounter; // [0..SUBSAMPLING), for decimation
+
+	// control gesture is recorded here
+	float gestureRingBuffer[GESTURELENGTH][CONTROLCHANNELS];
+	int gestureOffset; // index of the seam in the circular buffer
+	float gesture[GESTURELENGTH][CONTROLCHANNELS]; // windowed and unwrapped
+
+	COMPOSITIONMODE mode;
+
+	int recordingAudioFrame; // [0..AUDIOFRAMES)
+	int recordingControlFrame; // [0..CONTROLFRAMES)
+
+	int playbackFrame[OVERLAP]; // [0..GRAINLENGTH)
+	int playbackOffset[OVERLAP]; // [-1..AUDIOFRAMES-GRAINLENGTH]
 };
 
 //---------------------------------------------------------------------
@@ -93,19 +100,22 @@ COMPOSITION_setup(BelaContext *context, struct COMPOSITION *C)
 	// clear everything to 0
 	std::memset(C, 0, sizeof(*C));
 
-	// initialize raised cosine window
-	for (int i = 0; i < LENGTH; ++i)
+	// initialize raised cosine windows
+	for (int i = 0; i < GRAINLENGTH; ++i)
 	{
-		C->window[i] = GAIN * (1 - cos(2 * M_PI * (i + 0.5) / LENGTH)) / 2;
+		C->audioWindow[i] = GAIN * (1 - cos(2 * M_PI * (i + 0.5) / GRAINLENGTH)) / 2;
+	}
+	for (int i = 0; i < GESTURELENGTH; ++i)
+	{
+		// gain is not important here
+		C->controlWindow[i] = 1 - cos(2 * M_PI * (i + 0.5) / GESTURELENGTH);
 	}
 
 	// initialize database
 	for (int i = 0; i < OVERLAP; ++i)
 	{
-		C->frame[i] = LENGTH / OVERLAP * i;
-		C->best[i] = NONE;
-		C->worst[i] = NONE;
-		C->gesture_frame[i] = LENGTH / OVERLAP / GESTURE_LENGTH * i;
+		C->playbackFrame[i] = i * GRAINLENGTH / OVERLAP;
+		C->playbackOffset[i] = NONE;
 	}
 
 	// all ok
@@ -120,98 +130,131 @@ void
 COMPOSITION_render(BelaContext *context, struct COMPOSITION *C,
 	float out[2], const float in[2], const float magnitude, const float phase)
 {
-	// record audio
-	for (int i = 0; i < OVERLAP; ++i)
+
+	// filter control signals
+	float control[2] =
+		{ lop(&C->controlFilter[0], magnitude, CONTROLCUTOFF)
+		, lop(&C->controlFilter[1], phase, CONTROLCUTOFF)
+		};
+	// decimate control signals
+	if (++(C->controlCounter) >= SUBSAMPLING)
 	{
-		if (C->worst[i] != NONE)
+		C->controlCounter = 0;
+		// record control signals
+		for (int c = 0; c < CONTROLCHANNELS; ++c)
 		{
-			for (int c = 0; c < 2; ++c)
+			C->gestureRingBuffer[C->gestureOffset][c] = control[c];
+		}
+		// wrap around buffer
+		if (++(C->gestureOffset) >= GESTURELENGTH)
+		{
+			C->gestureOffset = 0;
+		}
+	}
+
+	// fill buffers with incoming audio and control signals
+	if (C->mode == RECORDING)
+	{
+		// report progress as countdown from 10 to 0
+		int new_perdecage = C->recordingAudioFrame * 10 / AUDIOFRAMES;
+		int old_perdecage = (C->recordingAudioFrame - 1) * 10 / AUDIOFRAMES;
+		if (new_perdecage != old_perdecage)
+		{
+			rt_printf("%d\n", 10 - new_perdecage);
+		}
+
+		// record control signals
+		if (C->controlCounter == 0)
+		{
+			for (int c = 0; c < CONTROLCHANNELS; ++c)
 			{
-				C->audio[C->worst[i]][C->frame[i]][c] = C->window[C->frame[i]] * in[c];
+				C->control[C->recordingControlFrame][c] = control[c];
+			}
+			// check for full buffer
+			if (++(C->recordingControlFrame) >= CONTROLFRAMES)
+			{
+				C->mode = PLAYING;
 			}
 		}
-	}
 
-	// record gesture
-	float m = lop(&C->lowpass_filter[0], magnitude, 100);
-	float p = lop(&C->lowpass_filter[1], phase, 100);
-	for (int i = 0; i < OVERLAP; ++i)
-	{
-		if (++C->gesture_frame[i] == LENGTH / GESTURE_LENGTH)
+		// record audio
+		for (int c = 0; c < AUDIOCHANNELS; ++c)
 		{
-			C->gesture_frame[i] = 0;
-			int j = C->frame[i] * GESTURE_LENGTH / LENGTH;
-			float w = C->window[C->frame[i]];
-			C->input_gesture[i].x[2 * j + 0] = w * m;
-			C->input_gesture[i].x[2 * j + 1] = w * p;
+			C->audio[C->recordingAudioFrame][c] = in[c];
+		}
+		if (++(C->recordingAudioFrame) >= AUDIOFRAMES)
+		{
+			C->mode = PLAYING;
 		}
 	}
 
-	// playback audio
-	if (C->count < COUNT)
-	{
-		// pass through during training
-		out[0] = in[0];
-		out[1] = in[1];
-	}
+	// play back
 	else
 	{
-		// play best matches
-		out[0] = 0;
-		out[1] = 0;
-		for (int i = 0; i < OVERLAP; ++i)
+		// overlap-add grains
+		float output[2] = { 0, 0 };
+		for (int o = 0; o < OVERLAP; ++o)
 		{
-			if (C->best[i] != NONE)
+			if (C->playbackOffset[o] != NONE)
 			{
-				for (int c = 0; c < 2; ++c)
+				float gain = C->audioWindow[C->playbackFrame[o]];
+				int playbackIndex = C->playbackOffset[o] + C->playbackFrame[o];
+				for (int c = 0; c < AUDIOCHANNELS; ++c)
 				{
-					out[c] += C->audio[C->best[i]][C->frame[i]][c];
+					output[c] += gain * C->audio[playbackIndex][c];
 				}
 			}
 		}
-	}
-	
-	// advance audio
-	for (int i = 0; i < OVERLAP; ++i)
-	{
-		if (++C->frame[i] == LENGTH)
+		out[0] = output[0];
+		out[1] = output[1];
+
+		// advance pointers and look up next matches if necessary
+		for (int o = 0; o < OVERLAP; ++o)
 		{
-			C->frame[i] = 0;
-			// look up database
-			float best_distance = 1.0f/0.0f;
-			float worst_distance = -1.0f/0.0f;
-			int best_index = NONE;
-			int worst_index = NONE;
-			for (int j = 0; j < C->count; ++j)
+			// this will be true for only one overlap at a time,
+			// so inside here is not duplicated work
+			if (++(C->playbackFrame[o]) >= GRAINLENGTH)
 			{
-				float d = distance(C->input_gesture[i], C->gestures[j]);
-				if (d < best_distance)
+				C->playbackFrame[o] = 0;
+				// unwrap the recorded gesture
+				for (int i = 0; i < GESTURELENGTH; ++i)
 				{
-					best_distance = d;
-					best_index = j;
+					for (int c = 0; c < CONTROLCHANNELS; ++c)
+					{
+						C->gesture[i][c] = C->gestureRingBuffer[(C->gestureOffset + i) % GESTURELENGTH][c];
+					}
 				}
-				if (d > worst_distance)
+
+				// find the best match
+				int bestOffset = NONE;
+				float bestDistance = 1.0 / 0.0;
+				for (int i = 0; i < COUNT; ++i)
 				{
-					worst_distance = d;
-					worst_index = j;
+					// add pseudo-random jitter to increase variety
+					int jitter = JITTER ? rand() % GRAINLENGTH : 0;
+					int audioOffset = (i * GRAINLENGTH + jitter) / OVERLAP;
+					if (audioOffset + GRAINLENGTH > AUDIOFRAMES) continue;
+					int gestureOffset = (i * GESTURELENGTH + jitter / SUBSAMPLING) / OVERLAP;
+					if (gestureOffset + GESTURELENGTH > CONTROLFRAMES) continue;
+					// compute a goodness-of-fit metric (lower is better)
+					// currently weights all control channels equally
+					float distance = 0;
+					for (int g = 0; g < GESTURELENGTH; ++g)
+					{
+						float window = C->controlWindow[g];
+						for (int c = 0; c < CONTROLCHANNELS; ++c)
+						{
+							float delta = C->gesture[g][c] - C->control[gestureOffset + g][c];
+							distance += window * delta * delta;
+						}
+					}
+					if (distance < bestDistance)
+					{
+						bestDistance = distance;
+						bestOffset = audioOffset;
+					}
 				}
-			}
-			if (C->count < COUNT)
-			{
-				// fill database before overwriting
-				worst_index = C->count++;
-			}
-			else
-			{
-				// don't overwrite
-				worst_index = NONE;
-			}
-			C->best[i] = best_index;
-			C->worst[i] = worst_index;
-			if (worst_index != NONE)
-			{
-				rt_printf("%d%%\n", 100 * worst_index / COUNT);
-				C->gestures[worst_index] = C->input_gesture[i];
+				C->playbackOffset[o] = bestOffset;
 			}
 		}
 	}
