@@ -2,12 +2,13 @@
 /*
 
 Novelty
-by Claude Heiland-Allen 2023-10-10, 2023-10-12, 2023-11-07
+by Claude Heiland-Allen 2023-10-10, 2023-10-12, 2023-11-07, 2023-11-09
 
 Audio granulator with gesture matching.
 
 Training process associates gestures with sounds.
-This happens in the first ~20 seconds after launch.
+This happens in the first few seconds after launch.
+Sound can be from live input or pre-recorded file.
 
 Then gesture input plays the sound with best-matching gesture.
 
@@ -44,10 +45,13 @@ const char *COMPOSITION_name = "novelty";
 // channels must currently both be 2
 #define CONTROLCHANNELS 2 // magnitude and phase
 #define AUDIOCHANNELS 2 // stereo
-#define COUNT 2048 // size of database
+#define LIVEINPUT 0 // set to 1 to use live input, otherwise input.wav
+#define INPUTDURATION 5.663 // in seconds, should match input.wav if LIVEINPUT is not set
+#define PASSTHRU 1 // pass input to output while recording (set to 0 with mic + speakers)
 #define GRAINLENGTH 4096 // audio frames per grain
 #define OVERLAP 8 // number of simultaneous playback grains
 #define GAIN (2.0f / OVERLAP) // output volume level
+#define COUNT ((int)(INPUTDURATION * 44100 * OVERLAP / GRAINLENGTH)) // size of database
 #define SUBSAMPLING 128 // ratio of audio to control sample rate
 #define CONTROLCUTOFF 100 // control data filter cutoff frequency
 #define GESTURELENGTH (GRAINLENGTH / SUBSAMPLING) // points per gesture
@@ -118,6 +122,25 @@ COMPOSITION_setup(BelaContext *context, struct COMPOSITION *C)
 		C->playbackOffset[i] = NONE;
 	}
 
+	if (! LIVEINPUT)
+	{
+		// read audio file
+		SF_INFO info = {0};
+		SNDFILE *in = sf_open("input.wav", SFM_READ, &info);
+		if (! in)
+		{
+			rt_printf("error: could not open 'input.wav'\n");
+			return false;
+		}
+		if (info.channels != AUDIOCHANNELS)
+		{
+			rt_printf("error: 'input.wav' has %d != %d audio channels\n", info.channels, AUDIOCHANNELS);
+			return false;
+		}
+		sf_readf_float(in, &C->audio[0][0], AUDIOFRAMES);
+		sf_close(in);
+	}
+
 	// all ok
 	return true;
 }
@@ -155,6 +178,21 @@ COMPOSITION_render(BelaContext *context, struct COMPOSITION *C,
 	// fill buffers with incoming audio and control signals
 	if (C->mode == RECORDING)
 	{
+		// pass through input to output
+		if (PASSTHRU)
+		{
+			for (int c = 0; c < AUDIOCHANNELS; ++c)
+			{
+				if (LIVEINPUT)
+				{
+					out[c] = in[c];
+				}
+				else
+				{
+					out[c] = C->audio[C->recordingAudioFrame][c];
+				}
+			}
+		}
 		// report progress as countdown from 10 to 0
 		int new_perdecage = C->recordingAudioFrame * 10 / AUDIOFRAMES;
 		int old_perdecage = (C->recordingAudioFrame - 1) * 10 / AUDIOFRAMES;
@@ -178,9 +216,12 @@ COMPOSITION_render(BelaContext *context, struct COMPOSITION *C,
 		}
 
 		// record audio
-		for (int c = 0; c < AUDIOCHANNELS; ++c)
+		if (LIVEINPUT)
 		{
-			C->audio[C->recordingAudioFrame][c] = in[c];
+			for (int c = 0; c < AUDIOCHANNELS; ++c)
+			{
+				C->audio[C->recordingAudioFrame][c] = in[c];
+			}
 		}
 		if (++(C->recordingAudioFrame) >= AUDIOFRAMES)
 		{
