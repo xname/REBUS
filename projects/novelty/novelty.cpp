@@ -29,6 +29,7 @@ Recommended block size with default settings: 512 samples.
 
 #include <libraries/REBUS/REBUS.h>
 #include <libraries/REBUS/dsp.h>
+#include <libraries/sndfile/sndfile.h>
 
 //---------------------------------------------------------------------
 // added to audio recording filename
