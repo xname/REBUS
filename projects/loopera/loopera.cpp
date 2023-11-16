@@ -9,6 +9,7 @@ Simple audio loop granulator.
 Magnitude controls length.
 Phase controls starting offset.
 
+NOTE: audio loop is not included!
 Audio loop file is expected to be called 'loop.wav' next to this file.
 
 */
