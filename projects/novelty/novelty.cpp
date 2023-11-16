@@ -14,6 +14,11 @@ Then gesture input plays the sound with best-matching gesture.
 
 Recommended block size with default settings: 512 samples.
 
+
+NOTE: if you set LIVEINPUT to 0 in the configuration below
+you then need to add your own audio file called "input.wav"
+and set INPUTDURATION to its length in seconds (fractions allowed)
+
 */
 
 //---------------------------------------------------------------------
@@ -46,8 +51,8 @@ const char *COMPOSITION_name = "novelty";
 // channels must currently both be 2
 #define CONTROLCHANNELS 2 // magnitude and phase
 #define AUDIOCHANNELS 2 // stereo
-#define LIVEINPUT 0 // set to 1 to use live input, otherwise input.wav
-#define INPUTDURATION 5.663 // in seconds, should match input.wav if LIVEINPUT is not set
+#define LIVEINPUT 1 // set to 1 to use live input, otherwise input.wav
+#define INPUTDURATION 10.0 // in seconds, should match input.wav if LIVEINPUT is not set
 #define PASSTHRU 1 // pass input to output while recording (set to 0 with mic + speakers)
 #define GRAINLENGTH 4096 // audio frames per grain
 #define OVERLAP 8 // number of simultaneous playback grains
