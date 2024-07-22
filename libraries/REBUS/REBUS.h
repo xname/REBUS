@@ -11,6 +11,7 @@ by Claude Heiland-Allen 2023-06-14
 based on workshop template by xname 2023
 audio recorder based on an example found on Bela forums
 converted to library 2023-06-28
+configurable scope and record channels added 2024-07-22
 
 */
 
@@ -31,6 +32,18 @@ converted to library 2023-06-28
 #endif
 
 //---------------------------------------------------------------------
+// available channels for scope and recording
+enum CHANNEL
+{
+	OUT_LEFT = 0,
+	OUT_RIGHT = 1,
+	IN_LEFT = 2,
+	IN_RIGHT = 3,
+	GAIN = 4,
+	PHASE = 5
+};
+
+//---------------------------------------------------------------------
 // set recording preference, can be overriden via compilation flags
 // #define RECORD 1 before including to enable recording.
 // #define RECORD 0 before including to keep recording disabled
@@ -38,7 +51,11 @@ converted to library 2023-06-28
 //
 // default to no recording, to avoid accidentally filling the storage.
 //
-// with default block size, recording adds 10-15% to the CPU load
+// #define RECORD_CHANNELS n to set number of recording channels
+// #define RECORD_CHANNEL_x y to configure recording channels
+// where x is in 1 to 6 and y is a channel name listed above
+//
+// with default settings, recording adds 10-15% to the CPU load
 // this additional cost reduces with larger block sizes
 
 #ifdef RECORD
@@ -51,12 +68,48 @@ converted to library 2023-06-28
 #define RECORD 0
 #endif
 
+// set recorder channel preferences
+#if RECORD
+#ifdef RECORD_CHANNELS
+#if ! (1 <= RECORD_CHANNELS && RECORD_CHANNELS <= 6)
+#error RECORD_CHANNELS must be between 1 and 6 inclusive
+#endif
+#define RECORD_CHANNELS_DEFINED 1
+#else
+#define RECORD_CHANNELS_DEFINED 0
+#define RECORD_CHANNELS 6
+#endif
+#ifndef RECORD_CHANNEL_1
+#define RECORD_CHANNEL_1 OUT_LEFT
+#endif
+#ifndef RECORD_CHANNEL_2
+#define RECORD_CHANNEL_2 OUT_RIGHT
+#endif
+#ifndef RECORD_CHANNEL_3
+#define RECORD_CHANNEL_3 IN_LEFT
+#endif
+#ifndef RECORD_CHANNEL_4
+#define RECORD_CHANNEL_4 IN_RIGHT
+#endif
+#ifndef RECORD_CHANNEL_5
+#define RECORD_CHANNEL_5 GAIN
+#endif
+#ifndef RECORD_CHANNEL_6
+#define RECORD_CHANNEL_6 PHASE
+#endif
+#endif
+
 //---------------------------------------------------------------------
 // set oscilloscope preference, can be overriden via compilation flags
 // #define SCOPE 1 before including to enable oscilloscope
 // and hide explanatory startup messages.
 // #define SCOPE 0 before including to disable oscilloscope.
+//
 // default to enabled oscilloscope, because it is useful
+//
+// #define SCOPE_CHANNELS n to set number of scope channels
+// #define SCOPE_CHANNEL_x y to configure scope channels
+// where x is in 1 to 6 and y is a channel name listed above
 
 #ifdef SCOPE
 // SCOPE was defined externally, hide messages
@@ -66,6 +119,37 @@ converted to library 2023-06-28
 #define SCOPE_DEFINED 0
 // default to enabled oscilloscope
 #define SCOPE 1
+#endif
+
+// set oscilloscope channel preferences
+#if SCOPE
+#ifdef SCOPE_CHANNELS
+#if ! (1 <= SCOPE_CHANNELS && SCOPE_CHANNELS <= 6)
+#error SCOPE_CHANNELS must be between 1 and 6 inclusive
+#endif
+#define SCOPE_CHANNELS_DEFINED 1
+#else
+#define SCOPE_CHANNELS_DEFINED 0
+#define SCOPE_CHANNELS 6
+#endif
+#ifndef SCOPE_CHANNEL_1
+#define SCOPE_CHANNEL_1 OUT_LEFT
+#endif
+#ifndef SCOPE_CHANNEL_2
+#define SCOPE_CHANNEL_2 OUT_RIGHT
+#endif
+#ifndef SCOPE_CHANNEL_3
+#define SCOPE_CHANNEL_3 IN_LEFT
+#endif
+#ifndef SCOPE_CHANNEL_4
+#define SCOPE_CHANNEL_4 IN_RIGHT
+#endif
+#ifndef SCOPE_CHANNEL_5
+#define SCOPE_CHANNEL_5 GAIN
+#endif
+#ifndef SCOPE_CHANNEL_6
+#define SCOPE_CHANNEL_6 PHASE
+#endif
 #endif
 
 //---------------------------------------------------------------------
@@ -209,18 +293,8 @@ void COMPOSITION_cleanup(BelaContext *context, struct COMPOSITION *C);
 
 #if RECORD
 
-// Record all the channels into a single multichannel file.
-// Channel order:
-// - audio output left
-// - audio output right
-// - audio input left
-// - audio input right
-// - magnitude/gain (from analog IO pin)
-// - phase (from analog IO pin)
-#define RECORD_CHANNELS 6
-
 // RECORD_SIZE must be >= block size * channels
-#define RECORD_SIZE (4096 * RECORD_CHANNELS)
+#define RECORD_SIZE 65536
 
 // forward declare the non-realtime record task callback
 template <typename COMPOSITION_T>
@@ -384,7 +458,7 @@ bool REBUS_setup(BelaContext *context, void *userData)
 #if SCOPE
 
 	// set up six channel oscilloscope at audio rate
-	S->scope.setup(6, context->audioSampleRate);
+	S->scope.setup(SCOPE_CHANNELS, context->audioSampleRate);
 
 #endif
 
@@ -536,20 +610,57 @@ void REBUS_render(BelaContext *context, void *userData)
 //---------------------------------------------------------------------
 
 		// output
+		// compile-time conditionals avoid wasted per-sample work
+
+#if SCOPE || RECORD
+		// store available channels for permuation below
+		float channels[6] = { out[0], out[1], in[0], in[1], magnitude, phase };
+#endif
 
 #if SCOPE
 		// write data to oscilloscope
-		S->scope.log(out[0], out[1], in[0], in[1], magnitude, phase);
+		float scope_data[SCOPE_CHANNELS];
+#if SCOPE_CHANNELS > 0
+		scope_data[0] = channels[CHANNEL::SCOPE_CHANNEL_1];
+#endif
+#if SCOPE_CHANNELS > 1
+		scope_data[1] = channels[CHANNEL::SCOPE_CHANNEL_2];
+#endif
+#if SCOPE_CHANNELS > 2
+		scope_data[2] = channels[CHANNEL::SCOPE_CHANNEL_3];
+#endif
+#if SCOPE_CHANNELS > 3
+		scope_data[3] = channels[CHANNEL::SCOPE_CHANNEL_4];
+#endif
+#if SCOPE_CHANNELS > 4
+		scope_data[4] = channels[CHANNEL::SCOPE_CHANNEL_5];
+#endif
+#if SCOPE_CHANNELS > 5
+		scope_data[5] = channels[CHANNEL::SCOPE_CHANNEL_6];
+#endif
+		S->scope.log(scope_data);
 #endif
 
 #if RECORD
 		// write data to interleaved buffer
-		S->recordOut[RECORD_CHANNELS * n + 0] = out[0];
-		S->recordOut[RECORD_CHANNELS * n + 1] = out[1];
-		S->recordOut[RECORD_CHANNELS * n + 2] = in[0];
-		S->recordOut[RECORD_CHANNELS * n + 3] = in[1];
-		S->recordOut[RECORD_CHANNELS * n + 4] = magnitude;
-		S->recordOut[RECORD_CHANNELS * n + 5] = phase;
+#if RECORD_CHANNELS > 0
+		S->recordOut[RECORD_CHANNELS * n + 0] = channels[CHANNEL::RECORD_CHANNEL_1];
+#endif
+#if RECORD_CHANNELS > 1
+		S->recordOut[RECORD_CHANNELS * n + 1] = channels[CHANNEL::RECORD_CHANNEL_2];
+#endif
+#if RECORD_CHANNELS > 2
+		S->recordOut[RECORD_CHANNELS * n + 2] = channels[CHANNEL::RECORD_CHANNEL_3];
+#endif
+#if RECORD_CHANNELS > 3
+		S->recordOut[RECORD_CHANNELS * n + 3] = channels[CHANNEL::RECORD_CHANNEL_4];
+#endif
+#if RECORD_CHANNELS > 4
+		S->recordOut[RECORD_CHANNELS * n + 4] = channels[CHANNEL::RECORD_CHANNEL_5];
+#endif
+#if RECORD_CHANNELS > 5
+		S->recordOut[RECORD_CHANNELS * n + 5] = channels[CHANNEL::RECORD_CHANNEL_6];
+#endif
 #endif
 
 		// write audio output
