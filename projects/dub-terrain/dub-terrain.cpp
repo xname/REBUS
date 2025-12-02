@@ -89,7 +89,7 @@ bool COMPOSITION_setup(BelaContext *context, struct COMPOSITION *C)
 // called once per audio frame (default 44100Hz sample rate)
 
 inline
-void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C,
+void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, int n,
   float out[2], const float in[2], const float magnitude, const float phase)
 {
 	static const sample4 prime2pi =

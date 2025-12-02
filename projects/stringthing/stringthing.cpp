@@ -90,7 +90,7 @@ bool COMPOSITION_setup(BelaContext *context, struct COMPOSITION *C)
 }
 
 inline
-void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, float out[2], const float in[2], const float magnitude, const float phase)
+void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, int n, float out[2], const float in[2], const float magnitude, const float phase)
 {
 	if (C->phase == 0)
 	{

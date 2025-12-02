@@ -131,7 +131,7 @@ bool COMPOSITION_setup(BelaContext *context, COMPOSITION *C)
 // store mutable state in the COMPOSITION struct, or in globals
 
 inline
-void COMPOSITION_render(BelaContext *context, COMPOSITION *C,
+void COMPOSITION_render(BelaContext *context, COMPOSITION *C, int n,
   float out[2], const float in[2], const float magnitude, const float phase)
 {
 
