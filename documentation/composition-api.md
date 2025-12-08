@@ -69,7 +69,7 @@ implement:
 const char *COMPOSITION_name = "will-be-put-in-wav-filename";
 struct COMPOSITION { /* stuff here */ };
 inline bool COMPOSITION_setup(BelaContext *context, COMPOSITION *C) { /* stuff here */ }
-inline void COMPOSITION_render(BelaContext *context, COMPOSITION *C, float out[2], const float in[2], const float magnitude, const float phase) { /* stuff here */ }
+inline void COMPOSITION_render(BelaContext *context, COMPOSITION *C, int n, float out[2], const float in[2], const float magnitude, const float phase) { /* stuff here */ }
 inline void COMPOSITION_cleanup(BelaContext *context, COMPOSITION *C) { /* stuff here */ }
 ```
 

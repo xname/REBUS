@@ -286,7 +286,7 @@ enum CHANNEL
 extern const char *COMPOSITION_name;
 struct COMPOSITION;
 bool COMPOSITION_setup(BelaContext *context, struct COMPOSITION *C);
-void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, float out[2], const float in[2], const float magnitude, const float phase);
+void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, int n, float out[2], const float in[2], const float magnitude, const float phase);
 void COMPOSITION_cleanup(BelaContext *context, struct COMPOSITION *C);
 
 //---------------------------------------------------------------------
@@ -606,7 +606,7 @@ void REBUS_render(BelaContext *context, void *userData)
 
 //---------------------------------------------------------------------
 // composition render
-		COMPOSITION_render(context, &S->composition, out, in, magnitude, phase);
+		COMPOSITION_render(context, &S->composition, n, out, in, magnitude, phase);
 //---------------------------------------------------------------------
 
 		// output

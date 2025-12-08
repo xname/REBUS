@@ -184,7 +184,7 @@ C->gEmPhase *= (2.0 * M_PI);
 	return out; */
 
 inline
-void COMPOSITION_render(BelaContext* context, COMPOSITION *C, float out[2], const float in[2], float mapped_magnitude, float mapped_phase)
+void COMPOSITION_render(BelaContext* context, COMPOSITION *C, int n, float out[2], const float in[2], float mapped_magnitude, float mapped_phase)
 {
 	// these must match the magic numbers in render.cpp
 	// to correctly undo the template's mapping
