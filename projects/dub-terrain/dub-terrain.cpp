@@ -125,7 +125,7 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, int n,
 
 	// rotate delayed feedbacks in stereo field
 	// rotation angles are multiples of the phase control
-	// compute sine and cosine of four multiples of the phase control
+	// compute sine and cosine of four multiples of the REBUS antenna phase control
 	sample4 sinPhase, cosPhase;
 	sincos4(sinPhase, cosPhase, vmulq_n_f32(prime2pi, phase));
 	// do four matrix-vector multiplications for the four channels
@@ -137,7 +137,7 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, int n,
 	feedback1 = tmp1;
 
 	// calculate filter parameters (q, hz)
-	// compute sine and cosine of four multiples of the magnitude control
+	// compute sine and cosine of four multiples of the REBUS antenna magnitude control
 	sample4 sinMagnitude, ignored;
 	sincos4(sinMagnitude, ignored, vmulq_n_f32(prime2pi, magnitude));
 	// filter q factor is constant for all of them
@@ -156,7 +156,7 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, int n,
 	feedback1 = vcf4(&C->bandpass[1], vmulq_f32(sinMagnitude, feedback1), hz, q);
 
 	// waveshaping / mixing
-	// overall non-feedback gain is based on the magnitude control
+	// overall non-feedback gain is based on the REBUS antenna magnitude control
 	sample gain = 0.5 * sinf(float(pi) * magnitude);
 	sample common = (3 * kick + 2 * bass + 4 * sub) * gain;
 	// add the four filtered feedbacks to the dry sounds and waveshape

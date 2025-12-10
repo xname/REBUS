@@ -110,9 +110,23 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, int n,
 
 	// quantized mapping in powers of two
 	float scale = 8; // magic number, tune to taste
+
+	// REBUS antenna 'magnitude' is mapped to the length of the segment,
+	// as a power-of-two subdivision of the total length.
+	// 'unit' will be 1 / 2^n where 'n' is an integer >= 0.
 	float unit = exp2f(fminf(0, ceilf(-scale * magnitude)));
+
+	// 'length' is the number of sample frames in the segment.
 	int length = C->frames * unit;
-	int offset = max(0, C->frames * floorf(phase / unit) * unit);
+
+	// REBUS antenna 'phase' is mapped to the starting offset of the segment,
+	// as a fraction into the loop.
+	// 'start' will be m / 2^n where 'm' and 'n' are integers,
+	// and 'n' is the same as the 'n' defined in 'unit'.
+	float start = floorf(phase / unit) * unit;
+
+	// 'offset' is the number of sample frames to offset the segment.
+	int offset = max(0, C->frames * start);
 
 	// prevent division by zero (replaces 0 with 1)
 	length += ! length;
@@ -121,7 +135,7 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, int n,
 	C->clock = (C->clock + 1) % C->frames;
 	int index = ((C->clock % length) + offset) % C->frames;
 
-	// read audio data from loop
+	// read audio data from loop buffer
 	for (int channel = 0; channel < 2; ++channel)
 	{
 		out[channel] = C->loop[C->channels * index + (channel % C->channels)];

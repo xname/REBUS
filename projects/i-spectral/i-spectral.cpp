@@ -121,6 +121,8 @@ void COMPOSITION_process(void *)
 			// exploit symmetry of FFT of real-valued signal
 			if (n > BLOCK / 2)
 			{
+				// the values on the right hand side
+				// have been calculated earlier in the loop
 				C->synth[n].r = C->synth[BLOCK - n].r;
 				C->synth[n].i = -C->synth[BLOCK - n].i;
 			}
@@ -212,7 +214,7 @@ inline
 void COMPOSITION_render(BelaContext *context, COMPOSITION *C, int n,
   float out[2], const float in[2], const float magnitude, const float phase)
 {
-	// read input
+	// read input from REBUS antenna phase input
 	// band-pass filter (hip to avoid DC offsets, lop to avoid aliasing)
 	float phaseBandpass = 2 * phase - 1;
 	phaseBandpass = lop(&C->phaseLowpass, hip(&C->phaseHighpass, phaseBandpass, 10.0f / (float)HOP), 100.0f);

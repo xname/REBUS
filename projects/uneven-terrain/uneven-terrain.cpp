@@ -95,10 +95,16 @@ inline
 void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, int n,
   float out[2], const float in[2], const float magnitude, const float phase)
 {
+	// get values from REBUS antenna
+	float m = magnitude;
+	float p = phase;
+
+#if 1 // FIXME
 	// smoothing to avoid zipper noise with non-REBUS controllers
 	// reduces EMI noise (?) with REBUS controller
-	float m = lop(&C->lo[0], magnitude, 10);
-	float p = lop(&C->lo[1], phase, 10);
+	m = lop(&C->lo[0], m, 10);
+	p = lop(&C->lo[1], p, 10);
+#endif
 
 	// make mapping less uneven
 	m *= 0.25;

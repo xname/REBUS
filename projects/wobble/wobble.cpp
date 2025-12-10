@@ -19,10 +19,10 @@ TODO: figure out how to get rid of clicks.
 //---------------------------------------------------------------------
 // options
 
-#define RECORD 1
-//#define SCOPE 0
-//#define CONTROL_LOP 1
-//#define CONTROL_NOTCH 1
+// #define RECORD 1
+// #define SCOPE 0
+// #define CONTROL_LOP 1
+// #define CONTROL_NOTCH 1
 
 //---------------------------------------------------------------------
 // dependencies
