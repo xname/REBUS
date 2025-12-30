@@ -7,6 +7,9 @@ by Claude Heiland-Allen 2023-06-19, 2023-06-28, 2023-07-11, 2023-09-26
 Techno with waveshaping and filters.
 Phase and magnitude control many things in a non-uniform way.
 
+
+Note: see line 105 below for adjustments for more reactivity.
+
 */
 
 //---------------------------------------------------------------------
@@ -99,6 +102,8 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, int n,
 	float m = magnitude;
 	float p = phase;
 
+// change '#if 1' to '#if 0' to make it more reactive
+// also makes sound a bit more acidic
 #if 1 // FIXME
 	// smoothing to avoid zipper noise with non-REBUS controllers
 	// reduces EMI noise (?) with REBUS controller
