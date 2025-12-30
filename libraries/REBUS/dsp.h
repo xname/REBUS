@@ -358,7 +358,7 @@ static inline sample hip(HIP *s, sample x, sample hz) {
 typedef struct { int length, woffset; } DELAY;
 
 // For example, a delay line with a maximum delay time of 1 second:
-typedef struct { DELAY delay; float buffer[SR] } DELAY1s;
+typedef struct { DELAY delay; float buffer[SR]; } DELAY1s;
 
 // Write a value to the delay line, incrementing the write index.
 static inline void delwrite(DELAY *del, sample x0) {
