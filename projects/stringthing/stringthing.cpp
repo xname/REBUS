@@ -151,17 +151,9 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, int n, floa
 		}
 	}
 
-#if 1 // FIXME
-	// low pass filter inputs from REBUS antenna
-	C->magnitude_lop *= 0.9999f;
-	C->magnitude_lop += 0.0001f * magnitude;
-	C->phase_lop *= 0.9999f;
-	C->phase_lop += 0.0001f * phase;
-#else
-	// directly use inputs from REBUS antenna
+	// use inputs from REBUS antenna
 	C->magnitude_lop = magnitude;
 	C->phase_lop = phase;
-#endif
 
 	if (C->phase % HOP == 0) // periodically update string
 	{
