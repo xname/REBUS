@@ -46,29 +46,39 @@ typedef float R;
 
 struct elem
 {
+	// position and velocity in 3D
 	R x, y, z, dx, dy, dz;
 };
 
 struct COMPOSITION
 {
+	// physical model
 	struct elem string[2][MAXN];
+	// scanned waveform
 	float buf[MAXN][2];
+	// length of used part (2 * N <= MAXN)
 	int N;
+	// which string buffer for, ping-pong double buffering
 	int w;
+	// sample index (time)
 	int phase;
+	// sample rate
 	R sampleRate;
+	// desired pitch
 	R HZ;
-	R f1;
+	// used by the physical model
+	R f1; // input position frequency mapping
 	R f2;
-	R p1;
+	R p1; // input position oscillators
 	R p2;
-	R lo;
+	R lo; // left waveform filters
 	R lh;
 	R lb;
-	R ro;
+	R ro; // right waveform filters
 	R rh;
 	R rb;
-	R ls;
+	R ls; // low pass filter for string deviation
+	// input mapping filters
 	R magnitude_lop;
 	R phase_lop;
 };
@@ -83,6 +93,7 @@ bool COMPOSITION_setup(BelaContext *context, struct COMPOSITION *C)
 	C->sampleRate = context->audioSampleRate;
 	C->HZ = 96000.0f / 1024.0f;
 	C->N = std::fmin(std::fmax(C->sampleRate / C->HZ, (R)MINN), (R)MAXN);
+	// initial string position is hanging vertically downwards
 	for (int i = 0; i < C->N; ++i) {
 		C->string[C->w][i].z = -i;
 	}
@@ -92,9 +103,10 @@ bool COMPOSITION_setup(BelaContext *context, struct COMPOSITION *C)
 inline
 void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, int n, float out[2], const float in[2], const float magnitude, const float phase)
 {
-	if (C->phase == 0)
+	if (C->phase == 0) // when run out of buffer to play
 	{
 		// audio waveform based on shape of string
+		// find RMS deviation of string from origin
 		R s = 0;
 		for (int i = 0; i < C->N; ++i) {
 			s += C->string[C->w][i].dx * C->string[C->w][i].dx
@@ -102,35 +114,48 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, int n, floa
 			  +  C->string[C->w][i].dz * C->string[C->w][i].dz;
 		}
 		s = 4 * std::sqrt(s / C->N);
+		// low pass filter over time
 		C->ls = ((R)0.99) * C->ls + ((R)0.01) * s;
+		// reset to 1 if it's not positive
 		if (!(C->ls > 0)) { C->ls = 1; }
+		// find orientation of last point in the string
 		R a0 = -std::atan2(C->string[C->w][C->N-1].dy, C->string[C->w][C->N-1].dx);
 		R s0 = std::sin(a0);
 		R c0 = std::cos(a0);
+		// loop over the string twice (forward followed by reverse)
 		for (int j = 0; j < 2 * C->N; ++j) {
 			int i = j >= C->N ? 2 * C->N - 1 - j : j;
+			// rotate string x and y to match the orientation of the free end
 			R x =  c0 * C->string[C->w][i].dx + s0 * C->string[C->w][i].dy;
 			R y = -s0 * C->string[C->w][i].dx + c0 * C->string[C->w][i].dy;
+			// compute left and right audio channel input,
+			// based on position of string (z mono, x left, y right)
 			R lv = x * x + C->string[C->w][i].dz * C->string[C->w][i].dz;
 			R rv = y * y + C->string[C->w][i].dz * C->string[C->w][i].dz;
+			// weight by position on string (highest weight at free end)
 			R wd = (1 - std::cos(j * PI / C->N)) / 2;
 			lv = std::sqrt(lv) / C->ls;
 			rv = std::sqrt(rv) / C->ls;
+			// low pass filter along string
 			C->lo = ((R)0.999) * C->lo + ((R)0.001) * lv;
 			C->ro = ((R)0.999) * C->ro + ((R)0.001) * rv;
+			// difference is high pass filter
 			C->lh = lv - C->lo;
 			C->rh = rv - C->ro;
+			// mix with previous with soft clipping
 			C->lb = std::tanh(((R)0.5) * C->lb + ((R)0.5) * wd * C->lh);
 			C->rb = std::tanh(((R)0.5) * C->rb + ((R)0.5) * wd * C->rh);
+			// write to string audio buffer
 			C->buf[j][0] = std::tanh(2 * C->lb);
 			C->buf[j][1] = std::tanh(2 * C->rb);
 		}
 	}
-	C->magnitude_lop *= 0.9999f;
-	C->magnitude_lop += 0.0001f * magnitude;
-	C->phase_lop *= 0.9999f;
-	C->phase_lop += 0.0001f * phase;
-	if (C->phase % HOP == 0)
+
+	// use inputs from REBUS antenna
+	C->magnitude_lop = magnitude;
+	C->phase_lop = phase;
+
+	if (C->phase % HOP == 0) // periodically update string
 	{
 		// input mapping
 		R f = 2.0f * (C->magnitude_lop - 0.5f);
@@ -146,7 +171,7 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, int n, floa
 		C->p2 += C->f2 * C->N / C->sampleRate;
 		C->p1 -= std::floor(C->p1);
 		C->p2 -= std::floor(C->p2);
-		// first point is moved
+		// first point is moved according to input
 		{
 			R fx = a1 * std::cos(2 * PI * C->p1) - a2 * std::sin(2 * PI * C->p2);
 			R fy = a1 * std::sin(2 * PI * C->p1) + a2 * std::cos(2 * PI * C->p2);
@@ -158,7 +183,10 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, int n, floa
 			C->string[1-C->w][0].y = C->string[C->w][0].y + C->string[1-C->w][0].dy * DT;
 			C->string[1-C->w][0].z = C->string[C->w][0].z + C->string[1-C->w][0].dz * DT;
 		}
-		// rest of string moves
+		// rest of string moves according to physical model:
+		// force[i] := (position[i-1] - 2 position[i] + position[i+1]) + gravity
+		// velocity[i] := friction * velocity[i] + force[i] * dt
+		// position[i] := position[i] + velocity[i] * dt
 		for (int i = 1; i < C->N - 1; ++i) {
 			R fx = C->string[C->w][i-1].x + C->string[C->w][i+1].x - 2 * C->string[C->w][i].x;
 			R fy = C->string[C->w][i-1].y + C->string[C->w][i+1].y - 2 * C->string[C->w][i].y;
@@ -183,9 +211,11 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, int n, floa
 			C->string[1-C->w][i].y = C->string[C->w][i].y + C->string[1-C->w][i].dy * DT;
 			C->string[1-C->w][i].z = C->string[C->w][i].z + C->string[1-C->w][i].dz * DT;
 		}
+		// toggle double-buffering index
 		C->w = 1 - C->w;
 	}
-	// play buffer
+
+	// play waveform from buffer
 	out[0] = C->buf[C->phase][0];
 	out[1] = C->buf[C->phase][1];
 	C->phase++;
