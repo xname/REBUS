@@ -1,0 +1,19 @@
+██████  ███████ ██████  ██    ██ ███████      █████  ██      ██████  ██   ██  █████  
+██   ██ ██      ██   ██ ██    ██ ██          ██   ██ ██      ██   ██ ██   ██ ██   ██ 
+██████  █████   ██████  ██    ██ ███████     ███████ ██      ██████  ███████ ███████ 
+██   ██ ██      ██   ██ ██    ██      ██     ██   ██ ██      ██      ██   ██ ██   ██ 
+██   ██ ███████ ██████   ██████  ███████     ██   ██ ███████ ██      ██   ██ ██   ██ 
+
+
+
+To use this code you will need a REBUS (https://xname.cc/rebus).
+Alternatively, you could use a Bela (Bela.io) and attach two loose wires (demo mode) or two different sensors to the AnalogIn 0 and 4.
+For the Bulb controller, you'll need a light bulb connected to pin 1 (analogue out).
+If you want to use CV out, use the pin 0 of Analogue OUT in Bela.
+
+We hope you enjoy our code.
+
+May the Waves be with You!!
+
+
+

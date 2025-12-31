@@ -1,0 +1,87 @@
+██████  ███████ ██████  ██    ██ ███████      █████  ██      ██████  ██   ██  █████  
+██   ██ ██      ██   ██ ██    ██ ██          ██   ██ ██      ██   ██ ██   ██ ██   ██ 
+██████  █████   ██████  ██    ██ ███████     ███████ ██      ██████  ███████ ███████ 
+██   ██ ██      ██   ██ ██    ██      ██     ██   ██ ██      ██      ██   ██ ██   ██ 
+██   ██ ███████ ██████   ██████  ███████     ██   ██ ███████ ██      ██   ██ ██   ██ 
+                                                                                     
+                                                                                     
+REBUS prototype1 - RELEASE ALPHA 2016 - 2025
+December 31st 2025
+
+Wlecome to the ALPHA release of the first prototype of REBUS 
+
+This release contains code written in different periods as part of the research underlying the development of the instrument REBUS.
+The code is currently based on the Bela API, however the development of REBUS started before BELA was even called Bela (it was a Beaglebone Black with audio cape) as part of the DSP module taught by Andrew McPherson at Media & Arts Technology DTC at Queen Mary University of London.
+
+
+Please refer to the README for an indepth history of the material contained in this release, as a number of videos, releases, papers, performances and publications have used the code included in this release.
+
+The code contains different phases of development and aproaches, including Claude Heiland-Hallen's attempt at creating a REBUS dedicated architecture and REBUS library. You may find this code incoherent and occasionally confusing, so if this bothers you, please wait for the BETA release. 
+
+Claude's library contains code ported from his Clive software, as well as snippets copied directly from Pure Data: if this excites you, please have a look! 
+
+We are happy to share this as a selection of a variety of approaches and experiments, some code has been used in user studies, other code has been used to record albums, tracks, workshops, public presentations, and a variety of outputs.
+
+
+TODO
+
+[1] integrate Claude's approach and library with the rest of the BELA experiments that are out there. This implies the following:
+
+### use the Bela API instead of recreating in memory redundant functions and variables:
+
+- pi -> M_PI
+- twopi
+- clamp -> constrain
+
+### separate headers and libraries so that each composition only compiles the necessary code
+
+### integrate the Bela own dsp.h with Claude's dsp.h and dsp_neon.h 
+
+### cosider whether a number of functions are necessary or can be omitted
+
+- wrapto()
+- wrapat()
+- trisaw()
+- mtof()
+- ftom()
+- dbtorms()
+- rmstodb()
+- dbtopow()
+- powtodb()
+- bytebeat()
+- bitcrush()
+- bandpass() (for biquad)
+- notch() (for biquad; is used, but only in part of library concerned with "two-wires")
+- vcf(), vcff() (but keep one as documentation for neon vcf4)
+- lopf() (single precision version of lop())
+- delread2()
+- delread4()
+
+### include further documentation and instruction for the community to be able to use the material and contribute to it. 
+Also, it will be used for teaching part of the Advanced Audiovisual Processing module taught at Goldsmiths by xname.
+
+[2] Add more traditional electronic music compositional techniques adapted to REBUS, for example:
+
+- Euclidian 
+- more controllable drum machines
+- multi sample players
+
+[3] Visualisation
+
+- use the Bela GUI to create enticing visualisations in Javascript, merging the scope function and the possibility of making interactive audiovisual installations.
+
+[4] Hardware
+- add a screen to support the user in understanding what composition they are playing.
+
+
+REBUS will continue its journey in parallel pathways and dimensions, we hope you enjoy our code.
+
+
+Made with love by
+xname & the REBUS team!!
+
+
+
+  
+  
+
