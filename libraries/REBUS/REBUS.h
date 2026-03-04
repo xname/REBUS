@@ -35,12 +35,12 @@ configurable scope and record channels added 2024-07-22
 // available channels for scope and recording
 enum CHANNEL
 {
-	OUT_LEFT = 0,
-	OUT_RIGHT = 1,
-	IN_LEFT = 2,
-	IN_RIGHT = 3,
-	GAIN = 4,
-	PHASE = 5
+	GAIN = 0,
+	PHASE = 1,
+	OUT_LEFT = 2,
+	OUT_RIGHT = 3,
+	IN_LEFT = 4,
+	IN_RIGHT = 5
 };
 
 //---------------------------------------------------------------------
@@ -80,22 +80,22 @@ enum CHANNEL
 #define RECORD_CHANNELS 6
 #endif
 #ifndef RECORD_CHANNEL_1
-#define RECORD_CHANNEL_1 OUT_LEFT
+#define RECORD_CHANNEL_1 GAIN 
 #endif
 #ifndef RECORD_CHANNEL_2
-#define RECORD_CHANNEL_2 OUT_RIGHT
+#define RECORD_CHANNEL_2 PHASE 
 #endif
 #ifndef RECORD_CHANNEL_3
-#define RECORD_CHANNEL_3 IN_LEFT
+#define RECORD_CHANNEL_3 OUT_LEFT
 #endif
 #ifndef RECORD_CHANNEL_4
-#define RECORD_CHANNEL_4 IN_RIGHT
+#define RECORD_CHANNEL_4 OUT_RIGHT
 #endif
 #ifndef RECORD_CHANNEL_5
-#define RECORD_CHANNEL_5 GAIN
+#define RECORD_CHANNEL_5 IN_LEFT
 #endif
 #ifndef RECORD_CHANNEL_6
-#define RECORD_CHANNEL_6 PHASE
+#define RECORD_CHANNEL_6 IN_OUT
 #endif
 #endif
 
@@ -124,31 +124,25 @@ enum CHANNEL
 // set oscilloscope channel preferences
 #if SCOPE
 #ifdef SCOPE_CHANNELS
-#if ! (1 <= SCOPE_CHANNELS && SCOPE_CHANNELS <= 6)
-#error SCOPE_CHANNELS must be between 1 and 6 inclusive
+#if ! (1 <= SCOPE_CHANNELS && SCOPE_CHANNELS <= 4)
+#error SCOPE_CHANNELS must be between 1 and 4 inclusive
 #endif
 #define SCOPE_CHANNELS_DEFINED 1
 #else
 #define SCOPE_CHANNELS_DEFINED 0
-#define SCOPE_CHANNELS 6
+#define SCOPE_CHANNELS 4
 #endif
 #ifndef SCOPE_CHANNEL_1
-#define SCOPE_CHANNEL_1 OUT_LEFT
+#define SCOPE_CHANNEL_1 GAIN 
 #endif
 #ifndef SCOPE_CHANNEL_2
-#define SCOPE_CHANNEL_2 OUT_RIGHT
+#define SCOPE_CHANNEL_2 PHASE
 #endif
 #ifndef SCOPE_CHANNEL_3
-#define SCOPE_CHANNEL_3 IN_LEFT
+#define SCOPE_CHANNEL_3 OUT_LEFT
 #endif
 #ifndef SCOPE_CHANNEL_4
-#define SCOPE_CHANNEL_4 IN_RIGHT
-#endif
-#ifndef SCOPE_CHANNEL_5
-#define SCOPE_CHANNEL_5 GAIN
-#endif
-#ifndef SCOPE_CHANNEL_6
-#define SCOPE_CHANNEL_6 PHASE
+#define SCOPE_CHANNEL_4 OUT_RIGHT
 #endif
 #endif
 
@@ -457,7 +451,7 @@ bool REBUS_setup(BelaContext *context, void *userData)
 
 #if SCOPE
 
-	// set up six channel oscilloscope at audio rate
+	// set up four channel oscilloscope at audio rate
 	S->scope.setup(SCOPE_CHANNELS, context->audioSampleRate);
 
 #endif
@@ -614,7 +608,7 @@ void REBUS_render(BelaContext *context, void *userData)
 
 #if SCOPE || RECORD
 		// store available channels for permuation below
-		float channels[6] = { out[0], out[1], in[0], in[1], magnitude, phase };
+		float channels[4] = { magnitude, phase, out[0], out[1]}; //in[0], in[1]
 #endif
 
 #if SCOPE
@@ -631,12 +625,6 @@ void REBUS_render(BelaContext *context, void *userData)
 #endif
 #if SCOPE_CHANNELS > 3
 		scope_data[3] = channels[CHANNEL::SCOPE_CHANNEL_4];
-#endif
-#if SCOPE_CHANNELS > 4
-		scope_data[4] = channels[CHANNEL::SCOPE_CHANNEL_5];
-#endif
-#if SCOPE_CHANNELS > 5
-		scope_data[5] = channels[CHANNEL::SCOPE_CHANNEL_6];
 #endif
 		S->scope.log(scope_data);
 #endif
