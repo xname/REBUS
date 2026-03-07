@@ -5,6 +5,7 @@
 // by Claude Heiland-Allen 2023-06-19
 // added float-specialisations 2023-06-27
 // added more documentation 2025-12-10
+// removed pi/twopi 2026-03-07 (use M_PI instead)
 
 //---------------------------------------------------------------------
 // common definitions
@@ -20,10 +21,6 @@ typedef float sample;
 #ifndef SR
 #define SR 44100
 #endif
-
-// Mathematical constants.
-#define pi 3.141592653589793
-#define twopi 6.283185307179586
 
 //---------------------------------------------------------------------
 // functions
@@ -192,7 +189,7 @@ static inline sample biquad(BIQUAD *bq, sample x0) {
 // Calculate the coefficients for a lowpass biquad filter
 // with cutoff frequency 'hz' (in Hz), and q-factor 'q'.
 static inline BIQUAD *lowpass(BIQUAD *bq, sample hz, sample q) {
-  double w0 = hz * twopi / SR;
+  double w0 = hz * 2*M_PI / SR;
   double a = fabs(sin(w0) / (2 * q));
   double c = cos(w0);
   double b0 = (1 - c) / 2, b1 = 1 - c, b2 = (1 - c) / 2;
@@ -208,7 +205,7 @@ static inline BIQUAD *lowpass(BIQUAD *bq, sample hz, sample q) {
 // Calculate the coefficients for a highpass biquad filter
 // with cutoff frequency 'hz' (in Hz), and q-factor 'q'.
 static inline BIQUAD *highpass(BIQUAD *bq, sample hz, sample q) {
-  double w0 = hz * twopi / SR;
+  double w0 = hz * 2*M_PI / SR;
   double a = fabs(sin(w0) / (2 * q));
   double c = cos(w0);
   double b0 = (1 + c) / 2, b1 = -(1 + c), b2 = (1 + c) / 2;
@@ -224,7 +221,7 @@ static inline BIQUAD *highpass(BIQUAD *bq, sample hz, sample q) {
 // Calculate the coefficients for a bandpass biquad filter
 // with center frequency 'hz' (in Hz), and q-factor 'q'.
 static inline BIQUAD *bandpass(BIQUAD *bq, sample hz, sample q) {
-  double w0 = hz * twopi / SR;
+  double w0 = hz * 2*M_PI / SR;
   double a = fabs(sin(w0) / (2 * q));
   double c = cos(w0);
   double b0 = a, b1 = 0, b2 = -a;
@@ -240,7 +237,7 @@ static inline BIQUAD *bandpass(BIQUAD *bq, sample hz, sample q) {
 // Calculate the coefficients for a notch biquad filter
 // with center frequency 'hz' (in Hz), and q-factor 'q'.
 static inline BIQUAD *notch(BIQUAD *bq, sample hz, sample q) {
-  double w0 = hz * twopi / SR;
+  double w0 = hz * 2*M_PI / SR;
   double a = fabs(sin(w0) / (2 * q));
   double c = cos(w0);
   double b0 = 1, b1 = -2 * c, b2 = 1;
@@ -270,7 +267,7 @@ typedef struct { double re, im; } VCF;
 static inline sample vcf(VCF *s, sample x, sample hz, sample q) {
   double qinv = q > 0 ? 1 / q : 0;
   double ampcorrect = 2 - 2 / (q + 2);
-  double cf = hz * twopi / SR;
+  double cf = hz * 2*M_PI / SR;
   if (cf < 0) { cf = 0; }
   double r = qinv > 0 ? 1 - cf * qinv : 0;
   if (r < 0) { r = 0; }
@@ -292,7 +289,7 @@ typedef struct { float re, im; } VCFF;
 static inline sample vcff(VCFF *s, sample x, sample hz, sample q) {
   float qinv = q > 0 ? 1 / q : 0;
   float ampcorrect = 2 - 2 / (q + 2);
-  float cf = hz * twopi / SR;
+  float cf = hz * 2*M_PI / SR;
   if (cf < 0) { cf = 0; }
   float r = qinv > 0 ? 1 - cf * qinv : 0;
   if (r < 0) { r = 0; }
@@ -314,7 +311,7 @@ typedef struct { double y; } LOP;
 // low pass filter function
 // (double precision version for more accuracy, less speed)
 static inline sample lop(LOP *s, sample x, sample hz) {
-  double c = clamp(twopi * hz / SR, 0, 1);
+  double c = clamp(2*M_PI * hz / SR, 0, 1);
   return s->y = mix(x, s->y, 1 - c);
 }
 
@@ -325,7 +322,7 @@ typedef struct { float y; } LOPF;
 // low pass filter function
 // (single precision version for more speed, less accuracy)
 static inline sample lopf(LOPF *s, sample x, sample hz) {
-  float c = clamp((float(twopi) / SR) * hz, 0, 1);
+  float c = clamp((float(2*M_PI) / SR) * hz, 0, 1);
   return s->y = mix(s->y, x, c);
 }
 
@@ -336,7 +333,7 @@ typedef struct { double y; } HIP;
 // high pass filter state
 // (double precision version for more accuracy, less speed)
 static inline sample hip(HIP *s, sample x, sample hz) {
-  double c = clamp(1 - twopi * hz / SR, 0, 1);
+  double c = clamp(1 - 2*M_PI * hz / SR, 0, 1);
   double n = (1 + c) / 2;
   double y = x + c * s->y;
   double o = n * (y - s->y);

@@ -29,8 +29,6 @@ TODO
 
 ### use the Bela API instead of recreating in memory redundant functions and variables:
 
-- pi -> M_PI
-- twopi
 - clamp -> constrain
 
 ### separate headers and libraries so that each composition only compiles the necessary code
