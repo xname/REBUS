@@ -126,7 +126,7 @@ sample4 vcf4(VCF4 *s, const sample4 &x, const sample4 &hz, const sample &q)
 	// q is scalar, have not yet needed vector version
 	sample qinv = 1 / q;
 	sample ampcorrect = 2 - 2 / (q + 2);
-	sample4 cf = vmulq_n_f32(hz, float(twopi) / SR); // cf = hz * 2 pi / SR
+	sample4 cf = vmulq_n_f32(hz, float(2*M_PI) / SR); // cf = hz * 2 pi / SR
 	sample4 one = vmovq_n_f32(1.0f); // one = 1
 	sample4 r = vsubq_f32(one, vmulq_n_f32(cf, qinv)); // r = 1 - cf * qinv
 	r = vmaxq_f32(r, vmovq_n_f32(0.0f)); // r = max(r, 0)
