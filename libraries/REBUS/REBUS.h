@@ -608,7 +608,7 @@ void REBUS_render(BelaContext *context, void *userData)
 
 #if SCOPE || RECORD
 		// store available channels for permuation below
-		float channels[4] = { magnitude, phase, out[0], out[1]}; //in[0], in[1]
+		float channels[6] = { magnitude, phase, out[0], out[1], in[0], in[1] };
 #endif
 
 #if SCOPE
