@@ -93,7 +93,7 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, int n,
   float out[2], const float in[2], const float magnitude, const float phase)
 {
 	static const sample4 prime2pi =
-		{ 2 * float(twopi), 3 * float(twopi), 5 * float(twopi), 7 * float(twopi) };
+		{ 2 * float(2*M_PI), 3 * float(2*M_PI), 5 * float(2*M_PI), 7 * float(2*M_PI) };
 	const sample4 one = vmovq_n_f32(1.0f);
 
 	// dry drum sounds
@@ -109,7 +109,7 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, int n,
 	clock *= clock;
 	clock *= clock;
 	// the kick is a sine wave with decaying frequency (chirp)
-	sample kick = sinf(32 * float(pi) * clock);
+	sample kick = sinf(32 * float(M_PI) * clock);
 	// the bass is resonant high pass filtered
 	sample bass = kick - biquad(&C->bass, kick);
 	// the sub is resonant low pass filtered
@@ -157,7 +157,7 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, int n,
 
 	// waveshaping / mixing
 	// overall non-feedback gain is based on the REBUS antenna magnitude control
-	sample gain = 0.5 * sinf(float(pi) * magnitude);
+	sample gain = 0.5 * sinf(float(M_PI) * magnitude);
 	sample common = (3 * kick + 2 * bass + 4 * sub) * gain;
 	// add the four filtered feedbacks to the dry sounds and waveshape
 	out[0] = sinf(common

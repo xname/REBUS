@@ -127,7 +127,7 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, int n,
 	hat *= hat;
 	hat *= hat;
 	// modulate hi-hat amplitude by magnitude
-	hat *= clamp(sinf(7 * float(twopi) * m), 0, 1);
+	hat *= clamp(sinf(7 * float(2*M_PI) * m), 0, 1);
 	// make hi-hats as high-pass filtered noise in stereo
 	float hats[2] =
 		{ hip(&C->hat[0], noise() * hat, 4000)
@@ -145,10 +145,10 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, int n,
 	// increase gain of attack
 	snare *= snare + 1;
 	// modulate snare amplitude by magnitude
-	snare *= clamp(sinf(6 * float(twopi) * m), 0, 1);
+	snare *= clamp(sinf(6 * float(2*M_PI) * m), 0, 1);
     // make snares as sample-and-hold filtered noise in stereo
     // modulate sample-and-hold frequency by magnitude
-	float snarePitch = mix(1000, 2000, 0.5 * (1.0 - cosf(6 * float(twopi) * m)));
+	float snarePitch = mix(1000, 2000, 0.5 * (1.0 - cosf(6 * float(2*M_PI) * m)));
 	float snares[2] =
 		{ samphold(&C->snare[0], noise(), wrap(snarePitch * clock - 0.25)) * snare
 		, samphold(&C->snare[1], noise(), wrap(snarePitch * clock + 0.25)) * snare
@@ -163,7 +163,7 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, int n,
 	kick *= kick;
 	kick *= kick;
 	// turn into a sine wave with decaying frequency (chirp)
-	kick = sinf(16 * float(pi) * kick);
+	kick = sinf(16 * float(M_PI) * kick);
 
 	// bass is kick minus a resonant high pass filter of kick
 	float bass = kick - biquad(&C->bq[0], kick);
@@ -173,7 +173,7 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, int n,
 
 	// comb filter
 	// frequency of filter is modulated by both magnitude and phase
-	float fbhz = mix(64, 512, 0.5f * (1 - cosf(5 * float(twopi) * (m + p))));
+	float fbhz = mix(64, 512, 0.5f * (1 - cosf(5 * float(2*M_PI) * (m + p))));
 	// read from delay lines
 	float fb0[2] =
 		{ delread1(&C->del0, 1000 / fbhz)
@@ -184,8 +184,8 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, int n,
 	fb0[1] = hip(&C->fb[1], fb0[1], 100);
 	// rotate in the stereo field modulated by phase
 	// this is like a matrix-vector multiplication
-	float co = cosf(float(twopi) * p);
-	float si = sinf(float(twopi) * p);
+	float co = cosf(float(2*M_PI) * p);
+	float si = sinf(float(2*M_PI) * p);
 	float fb[2] =
 		{ co * fb0[0] - si * fb0[1]
 		, si * fb0[0] + co * fb0[1]
@@ -196,20 +196,20 @@ void COMPOSITION_render(BelaContext *context, struct COMPOSITION *C, int n,
 	// the inside numbers (modulation coefficients) are different
 	// this gives stereo effects
 	out[0] = hip(&C->dc[0], 0.5f * sinf
-	(	( 3 * sinf(7 * float(twopi) * p) * kick
-		+ 2 * sinf( 5 * sinf(3 * float(twopi) * p) * bass
-		          + float(pi) * sinf(3 * float(twopi) * m))
-		+ 4 * sinf(5 * float(twopi) * m) * sub
-		+ 6 * sinf(6 * float(twopi) * m) * fb[0]
+	(	( 3 * sinf(7 * float(2*M_PI) * p) * kick
+		+ 2 * sinf( 5 * sinf(3 * float(2*M_PI) * p) * bass
+		          + float(M_PI) * sinf(3 * float(2*M_PI) * m))
+		+ 4 * sinf(5 * float(2*M_PI) * m) * sub
+		+ 6 * sinf(6 * float(2*M_PI) * m) * fb[0]
 		+ snares[0] + hats[0]
 		) * 0.5f
 	), 1);
 	out[1] = hip(&C->dc[1], 0.5f * sinf
-	(	( 3 * sinf(5 * float(twopi) * p) * kick
-		+ 2 * sinf( 5 * sinf(4 * float(twopi) * p) * bass
-		          + float(pi) * sinf(4 * float(twopi) * m))
-		+ 4 * sinf(7 * float(twopi) * m) * sub
-		+ 6 * sinf(8 * float(twopi) * m) * fb[1]
+	(	( 3 * sinf(5 * float(2*M_PI) * p) * kick
+		+ 2 * sinf( 5 * sinf(4 * float(2*M_PI) * p) * bass
+		          + float(M_PI) * sinf(4 * float(2*M_PI) * m))
+		+ 4 * sinf(7 * float(2*M_PI) * m) * sub
+		+ 6 * sinf(8 * float(2*M_PI) * m) * fb[1]
 		+ snares[1] + hats[1]
 		) * 0.5f
 	), 1);
