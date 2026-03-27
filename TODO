@@ -8,7 +8,7 @@
 REBUS prototype1 - RELEASE ALPHA 2016 - 2025
 December 31st 2025
 
-Wlecome to the ALPHA release of the first prototype of REBUS 
+Welcome to the ALPHA release of the first prototype of REBUS 
 
 This release contains code written in different periods as part of the research underlying the development of the instrument REBUS.
 The code is currently based on the Bela API, however the development of REBUS started before BELA was even called Bela (it was a Beaglebone Black with audio cape) as part of the DSP module taught by Andrew McPherson at Media & Arts Technology DTC at Queen Mary University of London.
@@ -16,7 +16,7 @@ The code is currently based on the Bela API, however the development of REBUS st
 
 Please refer to the README for an indepth history of the material contained in this release, as a number of videos, releases, papers, performances and publications have used the code included in this release.
 
-The code contains different phases of development and aproaches, including Claude Heiland-Hallen's attempt at creating a REBUS dedicated architecture and REBUS library. You may find this code incoherent and occasionally confusing, so if this bothers you, please wait for the BETA release. 
+The code contains different phases of development and aproaches, including Claude Heiland-Allen's attempt at creating a REBUS dedicated architecture and REBUS library. You may find this code incoherent and occasionally confusing, so if this bothers you, please wait for the BETA release. 
 
 Claude's library contains code ported from his Clive software, as well as snippets copied directly from Pure Data: if this excites you, please have a look! 
 
