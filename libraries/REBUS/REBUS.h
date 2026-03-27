@@ -105,7 +105,7 @@ enum CHANNEL
 // and hide explanatory startup messages.
 // #define SCOPE 0 before including to disable oscilloscope.
 //
-// default to enabled oscilloscope, because it is useful
+// default to enabled oscilloscope (with 4 channels), because it is useful
 //
 // #define SCOPE_CHANNELS n to set number of scope channels
 // #define SCOPE_CHANNEL_x y to configure scope channels
@@ -124,8 +124,8 @@ enum CHANNEL
 // set oscilloscope channel preferences
 #if SCOPE
 #ifdef SCOPE_CHANNELS
-#if ! (1 <= SCOPE_CHANNELS && SCOPE_CHANNELS <= 4)
-#error SCOPE_CHANNELS must be between 1 and 4 inclusive
+#if ! (1 <= SCOPE_CHANNELS && SCOPE_CHANNELS <= 6)
+#error SCOPE_CHANNELS must be between 1 and 6 inclusive
 #endif
 #define SCOPE_CHANNELS_DEFINED 1
 #else
@@ -143,6 +143,12 @@ enum CHANNEL
 #endif
 #ifndef SCOPE_CHANNEL_4
 #define SCOPE_CHANNEL_4 OUT_RIGHT
+#endif
+#ifndef SCOPE_CHANNEL_5
+#define SCOPE_CHANNEL_5 IN_LEFT
+#endif
+#ifndef SCOPE_CHANNEL_5
+#define SCOPE_CHANNEL_5 IN_RIGHT
 #endif
 #endif
 
@@ -451,7 +457,7 @@ bool REBUS_setup(BelaContext *context, void *userData)
 
 #if SCOPE
 
-	// set up four channel oscilloscope at audio rate
+	// set up up to 6 channel oscilloscope at audio rate
 	S->scope.setup(SCOPE_CHANNELS, context->audioSampleRate);
 
 #endif
@@ -608,7 +614,7 @@ void REBUS_render(BelaContext *context, void *userData)
 
 #if SCOPE || RECORD
 		// store available channels for permuation below
-		float channels[4] = { magnitude, phase, out[0], out[1]}; //in[0], in[1]
+		float channels[6] = { magnitude, phase, out[0], out[1], in[0], in[1] };
 #endif
 
 #if SCOPE
@@ -625,6 +631,12 @@ void REBUS_render(BelaContext *context, void *userData)
 #endif
 #if SCOPE_CHANNELS > 3
 		scope_data[3] = channels[CHANNEL::SCOPE_CHANNEL_4];
+#endif
+#if SCOPE_CHANNELS > 4
+		scope_data[4] = channels[CHANNEL::SCOPE_CHANNEL_5];
+#endif
+#if SCOPE_CHANNELS > 5
+		scope_data[5] = channels[CHANNEL::SCOPE_CHANNEL_6];
 #endif
 		S->scope.log(scope_data);
 #endif
