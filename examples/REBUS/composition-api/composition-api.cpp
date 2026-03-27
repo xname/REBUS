@@ -23,11 +23,13 @@ Settings->Make Parameters: CPPFLAGS="-DMODE=1"
 
 //---------------------------------------------------------------------
 
-// recordings of output, input and control signals
+// recordings of control, output, and input signals
 //
-// takes 64MB/min, 1GB/15mins
+// 6 channels takes 60MB/min, 1GB/16mins
+// 4 channels takes 40MB/min, 1GB/25mins
+// 2 channels takes 20MB/min, 1GB/50mins
 //
-// adds 10-15% to CPU load with default block size
+// 6 channels adds 10-15% to CPU load with default block size
 // this overhead reduces with larger block sizes
 
 // uncomment the next line to enable recording
@@ -36,15 +38,44 @@ Settings->Make Parameters: CPPFLAGS="-DMODE=1"
 // uncomment the next line to disable recording and hide messages
 // #define RECORD 0
 
+// the channels can be customized
+
+// uncomment the next line to record only control signals
+// #define RECORD_CHANNELS 2
+
+// alternatively, uncomment the next three lines to record only output audio
+// #define RECORD_CHANNELS 2
+// #define RECORD_CHANNEL_1 OUT_LEFT
+// #define RECORD_CHANNEL_2 OUT_RIGHT
+
+// the available channel constants are
+// GAIN PHASE OUT_LEFT OUT_RIGHT IN_LEFT IN_RIGHT
+
 //---------------------------------------------------------------------
 
-// oscilloscope shows the output, input and control signals
+// oscilloscope shows the control, output, and optionally input signals
 
 // uncomment the next line to disable oscilloscope
 // #define SCOPE 0
 
 // uncomment the next line to enable oscilloscope and hide messages
 // #define SCOPE 1
+
+// the channels can be customized
+
+// uncomment the next line to scope input too
+// #define SCOPE_CHANNELS 6
+
+// alternatively, uncomment the next line to scope only control signals
+// #define SCOPE_CHANNELS 2
+
+// alternatively, uncomment the next three lines to scope only input audio
+// #define SCOPE_CHANNELS 2
+// #define SCOPE_CHANNEL_1 IN_LEFT
+// #define SCOPE_CHANNEL_2 IN_RIGHT
+
+// the available channel constants are
+// GAIN PHASE OUT_LEFT OUT_RIGHT IN_LEFT IN_RIGHT
 
 //---------------------------------------------------------------------
 
